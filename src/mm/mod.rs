@@ -16,27 +16,19 @@ use std::sync::Mutex;
 
 use crate::util::bitmap::Bitmap;
 
-static PHYSICAL_MEMORY: Mutex<PhysicalMemory> = Mutex::new(PhysicalMemory::new());
+static PHYS_MEM: Mutex<PhysicalMemory> = Mutex::new(PhysicalMemory::new());
 
 struct PhysicalMemory {
+    available: usize,
     used: Bitmap,
 }
 
 impl PhysicalMemory {
     const fn new() -> Self {
         Self {
+            available: 0,
             used: Bitmap::empty(),
         }
-    }
-
-    fn allocate_contiguous(&mut self, length: usize) -> Option<usize> {
-        let block = self.used.find_zeros(length)?;
-        self.used.set_ones(block.start..block.start + length);
-        Some(block.start)
-    }
-
-    fn free(&mut self, address: usize, length: usize) {
-        self.used.set_zeros(address..address + length);
     }
 }
 
@@ -44,51 +36,75 @@ struct AddressSpace {}
 
 impl AddressSpace {
     fn allocate_contiguous(&mut self, length: usize) -> Option<(usize, usize)> {
-        let mut phys_mem = PHYSICAL_MEMORY.lock().unwrap();
+        let mut phys_mem = PHYS_MEM.lock().unwrap();
 
         // 1. Get contiguous free block of physical memory
-        let phys_addr = phys_mem.allocate_contiguous(length)?;
+        let phys_mem_block = phys_mem.used.consecutive_zeros(length).next()?;
 
-        // 2. Get contiguous free block of virtual memory
+        // 2. Get and commit contiguous free block of virtual memory
         let virt_addr = 0usize;
 
+        // 3. Commit physical memory
+        let phys_addr_start = phys_mem_block.start;
+        let phys_mem_block = phys_addr_start..phys_addr_start + length;
+        phys_mem.used.set_ones(phys_mem_block.clone());
+
         // 3. Write page table
-        // for virt_addr in virt_addr..virt_addr + length {
-        //     let ptl0 = virt_addr >> (10 + 12);
-        //     let ptl1_present = false;
-        //     if !ptl1_present {
-        //         let ptl1 = phys_mem.allocate_contiguous(1)?;
-        //         page_table[ptl0] = ptl1;
-        //     }
+        for (virt_addr, phys_addr) in (virt_addr..virt_addr + length).zip(phys_mem_block) {
+            let ptl0_index = virt_addr >> 10;
+            let ptl1_present = true;
+            if !ptl1_present {
+                let ptl1_phys_addr =
+                    unsafe { phys_mem.used.consecutive_zeros(1).next().unwrap_unchecked() }.start;
+                phys_mem.used.set_ones(ptl1_phys_addr..=ptl1_phys_addr);
 
-        //     let ptl1 = page_table[ptl0];
-        //     ptl1[virt_addr >> 12] = phys_addr + 0;
-        // }
+                page_table[ptl0_index] = ptl1_phys_addr;
+            }
 
-        Some((phys_addr, virt_addr))
+            let ptl1_index = virt_addr & (1 << 10);
+            page_table[ptl0_index][ptl1_index] = phys_addr
+        }
+
+        Some((phys_addr_start, virt_addr))
     }
 
     fn allocate(&mut self, length: usize) -> Option<usize> {
-        let mut phys_mem = PHYSICAL_MEMORY.lock().unwrap();
+        let mut phys_mem = PHYS_MEM.lock().unwrap();
 
         // 1. Get free blocks of physical memory
-        let phys_addrs = [0usize];
+        let mut phys_mem_blocks = phys_mem.used.consecutive_zeros(1);
 
-        // 2. Get contiguous free block of virtual memory
-        let virt_addr = 0usize;
+        // 2. Get and commit contiguous free block of virtual memory
+        let virt_addr_start = 0usize;
 
-        // 3. Write page table
-        // for virt_addr in virt_addr..virt_addr + length {
-        //     let ptl0 = virt_addr >> (10 + 12);
-        //     let ptl1_present = false;
-        //     if !ptl1_present {
-        //         let ptl1 = phys_mem.allocate_contiguous(1)?;
-        //         page_table[ptl0] = ptl1;
-        //     }
+        // 3. Commit physical memory and write page table
+        let mut phys_mem_block = 0..0;
+        for virt_addr in virt_addr_start..virt_addr_start + length {
+            let phys_addr = match phys_mem_block.next() {
+                Some(phys_addr) => phys_addr,
+                None => {
+                    phys_mem_block = unsafe { phys_mem_blocks.next().unwrap_unchecked() };
+                    let phys_addr = phys_mem_block.start;
+                    let remaining = length - (virt_addr - virt_addr_start);
+                    phys_mem_block = phys_addr..phys_addr + phys_mem_block.len().min(remaining);
+                    phys_mem_blocks.set_ones(phys_mem_block.clone());
+                    unsafe { phys_mem_block.next().unwrap_unchecked() }
+                }
+            };
 
-        //     let ptl1 = page_table[ptl0];
-        //     ptl1[virt_addr >> 12] = phys_addrs[0];
-        // }
+            let ptl0_index = virt_addr >> 10;
+            let ptl1_present = true;
+            if !ptl1_present {
+                let ptl1_phys_addr =
+                    unsafe { phys_mem.used.consecutive_zeros(1).next().unwrap_unchecked() }.start;
+                phys_mem.used.set_ones(ptl1_phys_addr..=ptl1_phys_addr);
+
+                page_table[ptl0_index] = ptl1_phys_addr;
+            }
+
+            let ptl1_index = virt_addr & (1 << 10);
+            page_table[ptl0_index][ptl1_index] = phys_addr
+        }
 
         None
     }

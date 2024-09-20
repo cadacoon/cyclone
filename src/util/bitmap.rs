@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::{thread, time::Duration};
+
 type BitmapType = usize;
 
 pub struct Bitmap(Box<[BitmapType]>);
@@ -22,52 +24,40 @@ impl Bitmap {
     pub const fn empty() -> Self {
         Self(unsafe {
             std::mem::transmute(std::ptr::slice_from_raw_parts(
-                std::ptr::NonNull::<BitmapType>::dangling().as_ptr() as *const BitmapType,
+                std::ptr::NonNull::<[BitmapType; 0]>::dangling().as_ptr() as *const BitmapType,
                 0,
             ))
         })
+    }
+
+    pub fn replace(&mut self, value: Box<[BitmapType]>) {
+        self.0 = value;
     }
 
     pub fn new(value: Box<[BitmapType]>) -> Self {
         Self(value)
     }
 
-    pub fn find_zeros(&self, length: usize) -> Option<std::ops::Range<usize>> {
-        let mut last_one = 0;
-        for (block_index, block) in self.0.iter().enumerate() {
-            let mut block_tmp = *block;
-            if block_tmp == 0 {
-                let next_one = (block_index + 1) * BitmapType::BITS as usize;
-                if next_one - last_one >= length {
-                    return Some(last_one..next_one);
-                }
-            }
-            while block_tmp != 0 {
-                let next_one =
-                    block_index * (BitmapType::BITS as usize) + block_tmp.trailing_zeros() as usize;
-                if next_one - last_one >= length {
-                    return Some(last_one..next_one);
-                }
-                last_one = next_one + 1;
-                block_tmp ^= block_tmp & block_tmp.wrapping_neg();
-            }
-            let next_one = last_one + block.leading_zeros() as usize;
-            if next_one - last_one >= length {
-                return Some(last_one..next_one);
-            }
-        }
+    pub fn consecutive_zeros(&mut self, fits: usize) -> ConsecutiveZeros {
+        assert!(fits > 0);
 
-        None
+        ConsecutiveZeros {
+            block: self.0[0],
+            bitmap: self,
+            block_index: 0,
+            index: 0,
+            fits,
+        }
     }
 
     pub fn set_ones<R: std::ops::RangeBounds<usize>>(&mut self, range: R) {
-        for (block, mask) in BitmapMasks::new(range, self.0.len()) {
+        for (block, mask) in Masks::new(range, BitmapType::BITS as usize * self.0.len()) {
             self.0[block] |= mask;
         }
     }
 
     pub fn set_zeros<R: std::ops::RangeBounds<usize>>(&mut self, range: R) {
-        for (block, mask) in BitmapMasks::new(range, self.0.len()) {
+        for (block, mask) in Masks::new(range, BitmapType::BITS as usize * self.0.len()) {
             self.0[block] &= !mask;
         }
     }
@@ -87,28 +77,30 @@ impl std::fmt::Display for Bitmap {
     }
 }
 
-struct BitmapMasks {
+struct Masks {
     first_block: usize,
     first_mask: BitmapType,
     last_block: usize,
     last_mask: BitmapType,
 }
 
-impl BitmapMasks {
+impl Masks {
     fn new<T: std::ops::RangeBounds<usize>>(range: T, length: usize) -> Self {
         let start = match range.start_bound() {
             std::ops::Bound::Included(value) => *value,
             std::ops::Bound::Excluded(value) => *value + 1,
             std::ops::Bound::Unbounded => 0,
         };
-        let first_block = start / BitmapType::BITS as usize;
-        let first_mask = BitmapType::MAX << (start % BitmapType::BITS as usize);
-
         let end = match range.end_bound() {
             std::ops::Bound::Included(value) => *value + 1,
             std::ops::Bound::Excluded(value) => *value,
             std::ops::Bound::Unbounded => length,
         };
+        assert!(end > start);
+        assert!(end <= length);
+
+        let first_block = start / BitmapType::BITS as usize;
+        let first_mask = BitmapType::MAX << (start % BitmapType::BITS as usize);
         let last_block = end / BitmapType::BITS as usize;
         let last_mask = (BitmapType::MAX >> 1)
             >> (BitmapType::BITS - (end % BitmapType::BITS as usize) as u32 - 1);
@@ -122,7 +114,7 @@ impl BitmapMasks {
     }
 }
 
-impl Iterator for BitmapMasks {
+impl Iterator for Masks {
     type Item = (usize, BitmapType);
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -153,6 +145,61 @@ impl Iterator for BitmapMasks {
     }
 }
 
+pub struct ConsecutiveZeros<'a> {
+    bitmap: &'a mut Bitmap,
+    block_index: usize,
+    block: usize,
+    index: usize,
+    fits: usize,
+}
+
+impl<'a> ConsecutiveZeros<'a> {
+    pub fn set_ones<R: std::ops::RangeBounds<usize>>(&mut self, range: R) {
+        self.bitmap.set_ones(range);
+    }
+}
+
+impl<'a> Iterator for ConsecutiveZeros<'a> {
+    type Item = std::ops::Range<usize>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while self.block_index < self.bitmap.0.len() {
+            if self.block == 0 {
+                let index = self.index;
+                let next_index = (self.block_index + 1) * BitmapType::BITS as usize;
+                if next_index - index >= self.fits {
+                    self.index = next_index;
+                    self.block_index += 1;
+                    self.block = *self.bitmap.0.get(self.block_index).unwrap_or(&0);
+                    return Some(index..next_index);
+                }
+            }
+            while self.block != 0 {
+                let index = self.index;
+                let next_index = self.block_index * (BitmapType::BITS as usize)
+                    + self.block.trailing_zeros() as usize;
+                self.index = next_index + 1;
+                self.block ^= self.block & self.block.wrapping_neg();
+                if next_index - index >= self.fits {
+                    return Some(index..next_index);
+                }
+            }
+            let index = self.index;
+            let next_index = self.index + self.bitmap.0[self.block_index].leading_zeros() as usize;
+            if next_index - index >= self.fits {
+                self.index = next_index;
+                self.block_index += 1;
+                self.block = *self.bitmap.0.get(self.block_index).unwrap_or(&0);
+                return Some(index..next_index);
+            }
+            self.block_index += 1;
+            self.block = *self.bitmap.0.get(self.block_index).unwrap_or(&0);
+        }
+
+        None
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -164,14 +211,26 @@ mod tests {
         // Full block
         let mut bitmap = Bitmap::new(Box::new([usize::MAX, usize::MIN, usize::MAX]));
         println!("{bitmap}");
-        assert_eq!(bitmap.find_zeros(block), Some(block..block * 2));
-        assert_eq!(bitmap.find_zeros(block + 1), None); // doesn't fit
+        assert_eq!(bitmap.consecutive_zeros(1).next(), Some(block..block * 2));
+        assert_eq!(
+            bitmap.consecutive_zeros(block).next(),
+            Some(block..block * 2)
+        );
+        assert_eq!(bitmap.consecutive_zeros(block + 1).next(), None); // doesn't fit
 
         // Full block and one extra
         bitmap.set_zeros(block - 1..block * 2 + 1);
         println!("{bitmap}");
-        assert_eq!(bitmap.find_zeros(block), Some(block - 1..block * 2)); // stop as soon as enough bits are found
-        assert_eq!(bitmap.find_zeros(block + 2), Some(block - 1..block * 2 + 1));
-        assert_eq!(bitmap.find_zeros(block + 3), None); // doesn't fit
+        assert_eq!(bitmap.consecutive_zeros(1).next(), Some(block - 1..block));
+        assert_eq!(
+            bitmap.consecutive_zeros(block).next(),
+            Some(block - 1..block * 2)
+        ); // stop as soon as enough bits are found
+        assert_eq!(
+            bitmap.consecutive_zeros(block + 2).next(),
+            Some(block - 1..block * 2 + 1)
+        );
+        assert_eq!(bitmap.consecutive_zeros(block + 3).next(), None); // doesn't
+                                                                      // fit
     }
 }
