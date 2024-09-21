@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{thread, time::Duration};
-
 type BitmapType = usize;
 
 pub struct Bitmap(Box<[BitmapType]>);
@@ -40,7 +38,6 @@ impl Bitmap {
 
     pub fn consecutive_zeros(&mut self, fits: usize) -> ConsecutiveZeros {
         assert!(fits > 0);
-
         ConsecutiveZeros {
             block: self.0[0],
             bitmap: self,
@@ -63,7 +60,7 @@ impl Bitmap {
     }
 }
 
-impl std::fmt::Display for Bitmap {
+impl std::fmt::Debug for Bitmap {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for block in &self.0 {
             let bytes = block.to_le_bytes();
@@ -210,7 +207,7 @@ mod tests {
 
         // Full block
         let mut bitmap = Bitmap::new(Box::new([usize::MAX, usize::MIN, usize::MAX]));
-        println!("{bitmap}");
+        println!("{bitmap:?}");
         assert_eq!(bitmap.consecutive_zeros(1).next(), Some(block..block * 2));
         assert_eq!(
             bitmap.consecutive_zeros(block).next(),
@@ -220,7 +217,7 @@ mod tests {
 
         // Full block and one extra
         bitmap.set_zeros(block - 1..block * 2 + 1);
-        println!("{bitmap}");
+        println!("{bitmap:?}");
         assert_eq!(bitmap.consecutive_zeros(1).next(), Some(block - 1..block));
         assert_eq!(
             bitmap.consecutive_zeros(block).next(),
