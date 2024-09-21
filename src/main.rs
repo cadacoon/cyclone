@@ -12,10 +12,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![no_std]
+#![no_main]
+
+extern crate alloc;
+
 pub mod mm;
 pub mod sm;
 pub mod util;
 
-fn main() {
-    println!("Hello, world!");
+#[global_allocator]
+static ALLOCATOR: mm::VirtualMemoryScope = mm::VirtualMemoryScope;
+
+core::arch::global_asm!(include_str!("start.S"), options(att_syntax));
+
+#[no_mangle]
+unsafe fn main(multiboot_magic: u32, multiboot_info: &mut multiboot::multiboot_info) -> ! {
+    loop {}
+}
+
+#[panic_handler]
+fn panic(info: &core::panic::PanicInfo) -> ! {
+    loop {}
+}
+
+mod multiboot {
+    include!(concat!(env!("OUT_DIR"), "/multiboot.rs"));
 }

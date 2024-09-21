@@ -4,4 +4,13 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-bitflags = "2.6"
+spin = "0.9"
+
+[build-dependencies]
+bindgen = "0.70"
+
+[profile.release]
+strip = true
+lto = true
+panic = "abort"
+codegen-units = 1
