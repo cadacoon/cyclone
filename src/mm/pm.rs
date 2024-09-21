@@ -22,8 +22,8 @@ pub struct PhysicalMemory {
 impl PhysicalMemory {
     pub(super) const fn new() -> Self {
         Self {
-            used: Bitmap::empty(),
-            free: 0,
+            used: Bitmap::new(),
+            free: 1024 * 1024,
         }
     }
 

@@ -12,15 +12,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod pm;
-mod vm;
-
-pub use pm::*;
-pub use vm::*;
-
-use spin::Mutex;
-
-pub static PHYS_MEM: Mutex<PhysicalMemory> = Mutex::new(PhysicalMemory::new());
-
-#[global_allocator]
-pub static VIRT_MEM: VirtualMemoryScope = VirtualMemoryScope;
+mod i386;

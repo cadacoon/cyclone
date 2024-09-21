@@ -9,6 +9,9 @@ spin = "0.9"
 [build-dependencies]
 bindgen = "0.70"
 
+[profile.dev]
+opt-level = 1
+
 [profile.release]
 strip = true
 lto = true

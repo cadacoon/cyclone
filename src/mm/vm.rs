@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use core::{alloc, arch::asm, ptr};
+use core::{alloc, arch::asm, ops, ptr};
 
 use super::PHYS_MEM;
 
@@ -162,9 +162,13 @@ unsafe impl alloc::GlobalAlloc for VirtualMemoryScope {
 }
 
 #[repr(C, align(4096))]
-struct PageTable([PageTableEntry; 1024]);
+pub struct PageTable([PageTableEntry; 1024]);
 
 impl PageTable {
+    pub const fn new() -> Self {
+        PageTable([PageTableEntry(0); 1024])
+    }
+
     unsafe fn ptl0() -> &'static mut Self {
         // self-reference (last page)
         &mut *(0xFFFF_F000 as *mut PageTable)
@@ -176,22 +180,41 @@ impl PageTable {
     }
 }
 
+impl ops::Index<usize> for PageTable {
+    type Output = PageTableEntry;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.0[index]
+    }
+}
+
+impl ops::IndexMut<usize> for PageTable {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        &mut self.0[index]
+    }
+}
+
 #[repr(C)]
-struct PageTableEntry(u32);
+#[derive(Clone, Copy)]
+pub struct PageTableEntry(u32);
 
 impl PageTableEntry {
     const FREE: u32 = 0;
     const PRESENT: u32 = 1 << 0;
+    const WRITEABLE: u32 = 1 << 1;
 
-    fn free(&self) -> bool {
+    #[inline(always)]
+    pub fn free(&self) -> bool {
         self.0 == Self::FREE
     }
 
-    fn map(&mut self, phys_page: usize) {
-        self.0 = (phys_page << 12) as u32 | Self::PRESENT;
+    #[inline(always)]
+    pub fn map(&mut self, phys_page: usize) {
+        self.0 = (phys_page << 12) as u32 | Self::PRESENT | Self::WRITEABLE;
     }
 
-    fn unmap(&mut self) -> usize {
+    #[inline(always)]
+    pub fn unmap(&mut self) -> usize {
         let phys_page = (self.0 >> 12) as usize;
         self.0 = Self::FREE;
         phys_page

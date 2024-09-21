@@ -14,28 +14,54 @@
 
 #![no_std]
 #![no_main]
+#![feature(sync_unsafe_cell)]
+
+use core::slice;
+
+use multiboot::multiboot_mmap_entry;
 
 extern crate alloc;
 
+mod bs;
 pub mod mm;
 pub mod sm;
 pub mod util;
 
-#[global_allocator]
-static ALLOCATOR: mm::VirtualMemoryScope = mm::VirtualMemoryScope;
-
-core::arch::global_asm!(include_str!("start.S"), options(att_syntax));
-
 #[no_mangle]
-unsafe fn main(multiboot_magic: u32, multiboot_info: &mut multiboot::multiboot_info) -> ! {
+unsafe fn main(_multiboot_magic: u32, multiboot_info: &mut multiboot::multiboot_info) -> ! {
+    // 1. init physical memory
+    {
+        let mut phys_mem = mm::PHYS_MEM.lock();
+        phys_mem.mark_used(0, 1024 * 1024);
+        for mmap_entry in slice::from_raw_parts(
+            multiboot_info.mmap_addr as usize as *const multiboot_mmap_entry,
+            multiboot_info.mmap_length as usize / size_of::<multiboot_mmap_entry>(),
+        ) {
+            if mmap_entry.type_ != multiboot::MULTIBOOT_MEMORY_AVAILABLE {
+                continue;
+            }
+            phys_mem.mark_free(
+                (mmap_entry.addr >> 12) as usize,
+                (mmap_entry.len >> 12) as usize,
+            );
+        }
+        phys_mem.mark_used(0, 1024);
+    }
+
     loop {}
 }
 
 #[panic_handler]
-fn panic(info: &core::panic::PanicInfo) -> ! {
+fn panic(_info: &core::panic::PanicInfo) -> ! {
     loop {}
 }
 
+#[allow(
+    dead_code,
+    non_camel_case_types,
+    non_snake_case,
+    non_upper_case_globals
+)]
 mod multiboot {
     include!(concat!(env!("OUT_DIR"), "/multiboot.rs"));
 }

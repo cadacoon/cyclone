@@ -12,32 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use core::{cmp, fmt, mem, ops, ptr};
+use core::{cmp, fmt, ops};
 
-use alloc::boxed::Box;
+pub type BitmapType = usize;
 
-type BitmapType = usize;
-
-pub struct Bitmap(Box<[BitmapType]>);
+pub struct Bitmap([BitmapType; (1024 * 1024) / 32]);
 
 unsafe impl Send for Bitmap {}
 
 impl Bitmap {
-    pub const fn empty() -> Self {
-        Self(unsafe {
-            mem::transmute(ptr::slice_from_raw_parts(
-                ptr::NonNull::<[BitmapType; 0]>::dangling().as_ptr() as *const BitmapType,
-                0,
-            ))
-        })
-    }
-
-    pub fn replace(&mut self, value: Box<[BitmapType]>) {
-        self.0 = value;
-    }
-
-    pub fn new(value: Box<[BitmapType]>) -> Self {
-        Self(value)
+    pub const fn new() -> Self {
+        Self([0; (1024 * 1024) / 32])
     }
 
     pub fn consecutive_zeros(&mut self, fits: usize) -> ConsecutiveZeros {
