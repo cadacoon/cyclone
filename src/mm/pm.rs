@@ -16,7 +16,7 @@ use crate::util::bitmap::Bitmap;
 
 pub struct PhysicalMemory {
     used: Bitmap,
-    free: usize,
+    pub free: usize,
 }
 
 impl PhysicalMemory {

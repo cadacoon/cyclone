@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use core::{alloc, arch::asm, ops, ptr};
+use core::{alloc, arch::asm, mem::MaybeUninit, ops, ptr};
 
 use super::PHYS_MEM;
 
@@ -85,9 +85,9 @@ impl VirtualMemoryScope {
 
             let ptl1_index = page & 0x3FF;
             let ptl1_entry = unsafe { &mut PageTable::ptl1(ptl0_index).0[ptl1_index] };
-            if !ptl1_entry.free() {
-                panic!("non-contiguous");
-            }
+            /*if !ptl1_entry.free() {
+                panic!("non-contiguous {}", ptl1_entry.0);
+            }*/
 
             ptl1_entry.map(phys_page);
         }
@@ -117,7 +117,7 @@ impl VirtualMemoryScope {
     }
 
     fn find_free(&self, pages: usize) -> Option<usize> {
-        let mut page_start = 0;
+        let mut page_start = 1;
         let mut consecutive_pages = 0;
         while consecutive_pages < pages {
             // not enough remaining pages
@@ -170,13 +170,13 @@ impl PageTable {
     }
 
     unsafe fn ptl0() -> &'static mut Self {
-        // self-reference (last page)
-        &mut *(0xFFFF_F000 as *mut PageTable)
+        // self-reference
+        Self::ptl1(0x3FF)
     }
 
     unsafe fn ptl1(ptl0_index: usize) -> &'static mut Self {
-        // self-reference (last page)
-        &mut *((0xFFC0_0000 | (ptl0_index << 12)) as *mut PageTable)
+        // self-reference
+        &mut *((((0x3FF << 10) | ptl0_index) << 12) as *mut PageTable)
     }
 }
 

@@ -28,7 +28,7 @@ arch::global_asm!(include_str!("i386_entry.S"), options(att_syntax));
 // The only reason why this method exists at all is to have minimal assembly.
 #[no_mangle]
 #[link_section = ".multiboot.init"]
-unsafe fn main_bootstrap(multiboot_magic: u32, multiboot_info: usize) -> ! {
+unsafe fn main_bootstrap(_multiboot_magic: u32, _multiboot_info: usize) -> ! {
     let boot_ptl1_virt_addr = BOOT_PTL1.get();
     let boot_ptl1_phys_addr = boot_ptl1_virt_addr.byte_sub(0xF000_0000);
     let boot_ptl1 = &mut *boot_ptl1_phys_addr;
@@ -41,7 +41,7 @@ unsafe fn main_bootstrap(multiboot_magic: u32, multiboot_info: usize) -> ! {
     let boot_ptl0 = &mut *boot_ptl0_phys_addr;
     boot_ptl0[0x000].map((boot_ptl1_phys_addr as usize) >> 12); // identity
     boot_ptl0[0x3C0].map((boot_ptl1_phys_addr as usize) >> 12);
-    boot_ptl0[0x3FF].map((boot_ptl0_phys_addr as usize) >> 12); // self-referential
+    boot_ptl0[0x3FF].map((boot_ptl0_phys_addr as usize) >> 12); // self-reference
 
     // enable paging
     arch::asm!(
@@ -53,27 +53,22 @@ unsafe fn main_bootstrap(multiboot_magic: u32, multiboot_info: usize) -> ! {
         tmp = out(reg) _,
     );
 
-    // reinitialize stack (use virtual addresses)
+    // fix stack (use virtual addresses)
     arch::asm!(
-        "mov {tmp}, $stack_top",
-        "sub {tmp}, 16",
-        "sub {tmp}, 8",
+        "mov {tmp}, esp",
+        "add {tmp}, 0xF0000000",
         "mov esp, {tmp}",
+        "mov {tmp}, ebp",
+        "add {tmp}, 0xF0000000",
         "mov ebp, {tmp}",
         tmp = out(reg) _,
     );
 
-    // call main with multiboot parameters
+    // jump to main
     arch::asm!(
-        "push ebp",
-        "mov ebp, esp",
-        "push {multiboot_info}",
-        "push {multiboot_magic}",
         "lea {tmp}, main",
-        "call {tmp}",
+        "jmp {tmp}",
         tmp = out(reg) _,
-        multiboot_magic = in(reg) multiboot_magic,
-        multiboot_info = in(reg) multiboot_info,
     );
 
     // main is of type never

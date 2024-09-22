@@ -40,10 +40,14 @@ unsafe fn main(_multiboot_magic: u32, multiboot_info: &mut multiboot::multiboot_
             if mmap_entry.type_ != multiboot::MULTIBOOT_MEMORY_AVAILABLE {
                 continue;
             }
-            phys_mem.mark_free(
-                (mmap_entry.addr >> 12) as usize,
-                (mmap_entry.len >> 12) as usize,
-            );
+            let phys_page_start = (mmap_entry.addr >> 12).min(1024 * 1024);
+            let phys_page_end = (phys_page_start + (mmap_entry.len >> 12)).min(1024 * 1024);
+            let phys_pages = phys_page_end - phys_page_start;
+            if phys_pages == 0 {
+                continue;
+            }
+
+            phys_mem.mark_free(phys_page_start as usize, phys_pages as usize);
         }
         phys_mem.mark_used(0, 1024);
     }
