@@ -12,39 +12,53 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use core::{mem, ptr};
+
 use crate::util::bitmap::Bitmap;
 
 pub struct PhysicalMemory {
-    used: Bitmap,
-    pub free: usize,
+    used: mem::ManuallyDrop<Bitmap>,
+    free: usize,
 }
 
 impl PhysicalMemory {
-    pub(super) const fn new() -> Self {
+    pub(super) const fn empty() -> Self {
         Self {
-            used: Bitmap::new(),
-            free: 1024 * 1024,
+            used: mem::ManuallyDrop::new(unsafe {
+                mem::transmute(ptr::slice_from_raw_parts(
+                    ptr::NonNull::<[usize; 0]>::dangling().as_ptr() as *const _,
+                    0,
+                ))
+            }),
+            free: 0,
         }
     }
 
-    pub fn mark_used(&mut self, page_start: usize, pages: usize) {
-        self.used.set_ones(page_start..page_start + pages);
-        self.free -= pages;
+    pub fn new(used: Bitmap, free: usize) -> Self {
+        Self {
+            used: mem::ManuallyDrop::new(used),
+            free,
+        }
     }
 
-    pub fn mark_free(&mut self, page_start: usize, pages: usize) {
-        self.used.set_zeros(page_start..page_start + pages);
-        self.free += pages;
+    pub fn mark_used(&mut self, frame_start: usize, frames: usize) {
+        self.used.set_ones(frame_start..frame_start + frames);
+        self.free -= frames; // TODO: count 0's
     }
 
-    pub fn find_free(&mut self, pages: usize) -> Option<usize> {
-        if self.free < pages {
+    pub fn mark_free(&mut self, frame_start: usize, frames: usize) {
+        self.used.set_zeros(frame_start..frame_start + frames);
+        self.free += frames; // TODO: count 1's
+    }
+
+    pub fn find_free(&mut self, frames: usize) -> Option<usize> {
+        if self.free < frames {
             return None;
         }
 
         self.used
-            .consecutive_zeros(pages)
+            .consecutive_zeros(frames)
             .next()
-            .map(|page_range| page_range.start)
+            .map(|frame_range| frame_range.start)
     }
 }

@@ -12,40 +12,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use core::{alloc, arch::asm, mem::MaybeUninit, ops, ptr};
+use core::{alloc, arch::asm, ops, ptr};
 
 use super::PHYS_MEM;
 
 pub struct VirtualMemory {
-    ptl0_phys_page: usize,
+    ptl0_phys_addr: usize,
 }
 
 impl VirtualMemory {
     pub fn r#use<F: FnOnce()>(&self, f: F) {
-        let previous_ptl0_phys_page: usize;
+        let previous_ptl0_phys_addr: usize;
         unsafe {
             asm!(
                 "mov {}, cr3",
                 "mov cr3, {}",
-                out(reg) previous_ptl0_phys_page,
-                in(reg) self.ptl0_phys_page,
-                options(nostack, preserves_flags)
+                out(reg) previous_ptl0_phys_addr,
+                in(reg) self.ptl0_phys_addr,
+                options(preserves_flags, nostack)
             );
         }
         f();
         unsafe {
             asm!(
                 "mov cr3, {}",
-                in(reg) previous_ptl0_phys_page,
-                options(nostack, preserves_flags)
+                in(reg) previous_ptl0_phys_addr,
+                options(preserves_flags, nostack)
             );
         }
-    }
-}
-
-impl Drop for VirtualMemory {
-    fn drop(&mut self) {
-        self.r#use(|| todo!());
     }
 }
 
@@ -61,38 +55,37 @@ impl VirtualMemoryScope {
         let mut phys_mem = PHYS_MEM.lock();
 
         // 1. get contiguous free block of physical memory
-        let phys_page_start = phys_mem.find_free(pages)?;
+        let frame_start = phys_mem.find_free(pages)?;
 
         // 2. get contiguous free block of virtual memory
         let page_start = self.find_free(pages)?;
 
         // 3. commit physical memory
-        phys_mem.mark_used(phys_page_start, pages);
+        phys_mem.mark_used(frame_start, pages);
 
         // 4. commit virtual memory by writing page table
-        for (page, phys_page) in
-            (page_start..page_start + pages).zip(phys_page_start..phys_page_start + pages)
+        for (page, frame) in (page_start..page_start + pages).zip(frame_start..frame_start + pages)
         {
             let ptl0_index = page >> 10;
             let ptl0_entry = unsafe { &mut PageTable::ptl0().0[ptl0_index] };
             if ptl0_entry.free() {
                 // allocate page table, note that page tables are owned by the address space
-                let ptl1_phys_page = phys_mem.find_free(1).unwrap();
-                phys_mem.mark_used(ptl1_phys_page, 1);
+                let ptl1_frame = phys_mem.find_free(1).unwrap();
+                phys_mem.mark_used(ptl1_frame, 1);
 
-                ptl0_entry.map(ptl1_phys_page);
+                ptl0_entry.map(ptl1_frame);
             }
 
             let ptl1_index = page & 0x3FF;
             let ptl1_entry = unsafe { &mut PageTable::ptl1(ptl0_index).0[ptl1_index] };
-            /*if !ptl1_entry.free() {
-                panic!("non-contiguous {}", ptl1_entry.0);
-            }*/
+            if !ptl1_entry.free() {
+                panic!("non-contiguous");
+            }
 
-            ptl1_entry.map(phys_page);
+            ptl1_entry.map(frame);
         }
 
-        Some((page_start, phys_page_start))
+        Some((page_start, frame_start))
     }
 
     pub fn free(&self, page_start: usize, pages: usize) {
@@ -111,8 +104,8 @@ impl VirtualMemoryScope {
                 panic!("already freed")
             }
 
-            let phys_page = ptl1_entry.unmap();
-            phys_mem.mark_free(phys_page, 1);
+            let frame = ptl1_entry.unmap();
+            phys_mem.mark_free(frame, 1);
         }
     }
 
@@ -135,14 +128,15 @@ impl VirtualMemoryScope {
 
             let ptl1_index = page & 0x3FF;
             let ptl1_entry = unsafe { &mut PageTable::ptl1(ptl0_index).0[ptl1_index] };
-            if !ptl1_entry.free() {
+            if ptl1_entry.free() {
                 consecutive_pages += 1;
                 continue;
             }
 
-            page_start += consecutive_pages;
+            page_start += 1 + consecutive_pages;
             consecutive_pages = 0;
         }
+
         Some(page_start)
     }
 }
@@ -209,14 +203,14 @@ impl PageTableEntry {
     }
 
     #[inline(always)]
-    pub fn map(&mut self, phys_page: usize) {
-        self.0 = (phys_page << 12) as u32 | Self::PRESENT | Self::WRITEABLE;
+    pub fn map(&mut self, frame: usize) {
+        self.0 = (frame << 12) as u32 | Self::PRESENT | Self::WRITEABLE;
     }
 
     #[inline(always)]
     pub fn unmap(&mut self) -> usize {
-        let phys_page = (self.0 >> 12) as usize;
+        let frame = (self.0 >> 12) as usize;
         self.0 = Self::FREE;
-        phys_page
+        frame
     }
 }

@@ -7,4 +7,4 @@ target = "i386-unknown-none.json"
 rustflags = ["-C", "code-model=kernel"]
 
 [target.i386-unknown-none]
-runner = ["./run.sh"]
+runner = ["./script/qemu.sh"]

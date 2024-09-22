@@ -16,10 +16,7 @@
 #![no_main]
 #![feature(sync_unsafe_cell)]
 
-use core::slice;
-
-use multiboot::multiboot_mmap_entry;
-
+#[macro_use]
 extern crate alloc;
 
 mod bs;
@@ -27,31 +24,7 @@ pub mod mm;
 pub mod sm;
 pub mod util;
 
-#[no_mangle]
-unsafe fn main(_multiboot_magic: u32, multiboot_info: &mut multiboot::multiboot_info) -> ! {
-    // 1. init physical memory
-    {
-        let mut phys_mem = mm::PHYS_MEM.lock();
-        phys_mem.mark_used(0, 1024 * 1024);
-        for mmap_entry in slice::from_raw_parts(
-            multiboot_info.mmap_addr as usize as *const multiboot_mmap_entry,
-            multiboot_info.mmap_length as usize / size_of::<multiboot_mmap_entry>(),
-        ) {
-            if mmap_entry.type_ != multiboot::MULTIBOOT_MEMORY_AVAILABLE {
-                continue;
-            }
-            let phys_page_start = (mmap_entry.addr >> 12).min(1024 * 1024);
-            let phys_page_end = (phys_page_start + (mmap_entry.len >> 12)).min(1024 * 1024);
-            let phys_pages = phys_page_end - phys_page_start;
-            if phys_pages == 0 {
-                continue;
-            }
-
-            phys_mem.mark_free(phys_page_start as usize, phys_pages as usize);
-        }
-        phys_mem.mark_used(0, 1024);
-    }
-
+fn main() -> ! {
     loop {}
 }
 

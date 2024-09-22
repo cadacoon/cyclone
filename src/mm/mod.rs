@@ -20,7 +20,9 @@ pub use vm::*;
 
 use spin::Mutex;
 
-pub static PHYS_MEM: Mutex<PhysicalMemory> = Mutex::new(PhysicalMemory::new());
+pub const GRANULARITY: usize = 4096;
+
+pub static PHYS_MEM: Mutex<PhysicalMemory> = Mutex::new(PhysicalMemory::empty());
 
 #[global_allocator]
 pub static VIRT_MEM: VirtualMemoryScope = VirtualMemoryScope;

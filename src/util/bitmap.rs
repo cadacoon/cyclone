@@ -14,15 +14,17 @@
 
 use core::{cmp, fmt, ops};
 
+use alloc::boxed::Box;
+
 pub type BitmapType = usize;
 
-pub struct Bitmap([BitmapType; (1024 * 1024) / 32]);
+pub struct Bitmap(Box<[BitmapType]>);
 
 unsafe impl Send for Bitmap {}
 
 impl Bitmap {
-    pub const fn new() -> Self {
-        Self([0; (1024 * 1024) / 32])
+    pub fn new(value: Box<[BitmapType]>) -> Self {
+        Self(value)
     }
 
     pub fn consecutive_zeros(&mut self, fits: usize) -> ConsecutiveZeros {
