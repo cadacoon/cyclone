@@ -21,7 +21,7 @@ pub struct Bitmap(Box<[BitmapType]>);
 
 impl Bitmap {
     /// Creates a new bitmap
-    pub fn new(value: Box<[BitmapType]>) -> Self {
+    pub const fn new(value: Box<[BitmapType]>) -> Self {
         Self(value)
     }
 

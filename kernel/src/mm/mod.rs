@@ -12,33 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![no_std]
-#![no_main]
-#![feature(sync_unsafe_cell)]
+mod pm;
+mod vm;
 
-#[macro_use]
-extern crate alloc;
+pub mod pg;
 
-mod bs;
-pub mod mm;
-pub mod sm;
-pub mod util;
-
-fn main() -> ! {
-    unreachable!()
-}
-
-#[panic_handler]
-fn panic(_info: &core::panic::PanicInfo) -> ! {
-    loop {}
-}
-
-#[allow(
-    dead_code,
-    non_camel_case_types,
-    non_snake_case,
-    non_upper_case_globals
-)]
-mod multiboot {
-    include!(concat!(env!("OUT_DIR"), "/multiboot.rs"));
-}
+pub use pm::*;
+pub use vm::*;

@@ -86,7 +86,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "cyclone"
+name = "cyclone_kernel"
 version = "0.1.0"
 dependencies = [
  "acpi",

@@ -1,10 +1,10 @@
 fn main() {
-    println!("cargo:rerun-if-changed=i386-unknown-none.ld");
-    println!("cargo:rustc-link-arg=-Ti386-unknown-none.ld");
+    println!("cargo:rerun-if-changed=kernel/x86.ld");
+    println!("cargo:rustc-link-arg=-Tkernel/x86.ld");
 
     bindgen::Builder::default()
         .use_core()
-        .header("include/multiboot.h")
+        .header("multiboot.h")
         .generate()
         .expect("Failed to generate bindings")
         .write_to_file(

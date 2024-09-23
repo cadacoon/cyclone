@@ -16,6 +16,9 @@ use core::{alloc, ptr};
 
 use super::PHYS_MEM;
 
+#[global_allocator]
+pub static VIRT_MEM: VirtualMemory = VirtualMemory;
+
 #[derive(Clone)]
 pub struct VirtualMemory;
 
@@ -26,7 +29,7 @@ impl VirtualMemory {
         for (page, frame) in
             (page_start..page_start + frames).zip(frame_start..frame_start + frames)
         {
-            let page_table = unsafe { &mut *super::pt::ROOT };
+            let page_table = unsafe { &mut *super::pg::PAGE_TABLE };
             let page_table = page_table.table_create(page >> 10);
             let page_table_entry = &mut page_table[page & 0x3FF];
             if !page_table_entry.free() {
@@ -62,7 +65,7 @@ impl VirtualMemory {
     pub fn free(&self, page_start: usize, pages: usize) {
         let mut phys_mem = PHYS_MEM.lock();
         for page in page_start..page_start + pages {
-            let page_table = unsafe { &mut *super::pt::ROOT };
+            let page_table = unsafe { &mut *super::pg::PAGE_TABLE };
             let page_table = page_table.table(page >> 10).expect("already freed");
             let page_table_entry = &mut page_table[page & 0x3FF];
             if page_table_entry.free() {
@@ -85,7 +88,7 @@ impl VirtualMemory {
             }
             let page = page_start + consecutive_pages;
 
-            let page_table = unsafe { &mut *super::pt::ROOT };
+            let page_table = unsafe { &mut *super::pg::PAGE_TABLE };
             let Some(page_table) = page_table.table(page >> 10) else {
                 consecutive_pages += 1024;
                 continue;
@@ -126,14 +129,14 @@ impl acpi::AcpiHandler for VirtualMemory {
         let virt_addr = if phys_addr <= 0x003F_FFFF {
             phys_addr
         } else {
-            let offset = phys_addr % super::pt::GRANULARITY;
+            let offset = phys_addr % super::pg::GRANULARITY;
             let page = self
                 .map(
-                    phys_addr / super::pt::GRANULARITY,
-                    size.div_ceil(super::pt::GRANULARITY),
+                    phys_addr / super::pg::GRANULARITY,
+                    size.div_ceil(super::pg::GRANULARITY),
                 )
                 .unwrap();
-            page * super::pt::GRANULARITY + offset
+            page * super::pg::GRANULARITY + offset
         };
         acpi::PhysicalMapping::new(
             phys_addr,

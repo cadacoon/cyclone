@@ -1,14 +1,5 @@
-[package]
-name = "cyclone"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-spin = "0.9"
-acpi = "5.0.0"
-
-[build-dependencies]
-bindgen = "0.70"
+[workspace]
+members = ["kernel"]
 
 [profile.dev]
 opt-level = 1

@@ -1,27 +1,18 @@
 use core::{marker, ops};
 
-pub const GRANULARITY: usize = 4096;
-pub const ROOT: *mut Table<Level2> = 0xFFFF_F000 as *mut _;
+pub const GRANULARITY: usize = 0x1000;
 
-pub enum Level2 {}
-pub enum Level1 {}
-
-pub trait Level {}
-
-impl Level for Level2 {}
-impl Level for Level1 {}
-
-pub trait HierarchicalLevel: Level {
-    type NextLevel: Level;
-}
-
-impl HierarchicalLevel for Level2 {
-    type NextLevel = Level1;
-}
+#[cfg(target_arch = "x86")]
+pub const PAGE_TABLE: *mut Table<Level2> = 0xFFFFF000 as *mut _;
+#[cfg(target_arch = "x86_64")]
+pub const PAGE_TABLE: *mut Table<Level4> = 0xFFFFFFFFFFFFF000 as *mut _;
 
 #[repr(C, align(4096))]
 pub struct Table<L: Level> {
+    #[cfg(target_arch = "x86")]
     entries: [Entry; 1024],
+    #[cfg(target_arch = "x86_64")]
+    entries: [Entry; 512],
     level: marker::PhantomData<L>,
 }
 
@@ -29,13 +20,6 @@ impl<L> Table<L>
 where
     L: Level,
 {
-    pub const fn new() -> Self {
-        Self {
-            entries: [Entry(0); 1024],
-            level: marker::PhantomData,
-        }
-    }
-
     fn init(&mut self) {
         for entry in &mut self.entries {
             entry.unmap();
@@ -74,7 +58,10 @@ where
         }
 
         let addr = self as *mut _ as usize;
+        #[cfg(target_arch = "x86")]
         let next_addr = addr << 10 | (index << 12);
+        #[cfg(target_arch = "x86_64")]
+        let next_addr = addr << 9 | (index << 12);
         Some(unsafe { &mut *(next_addr as *mut Table<L::NextLevel>) })
     }
 
@@ -117,4 +104,38 @@ impl Entry {
         self.0 = Self::FREE;
         frame
     }
+}
+
+pub trait Level {}
+
+pub enum Level1 {}
+pub enum Level2 {}
+#[cfg(target_arch = "x86_64")]
+pub enum Level3 {}
+#[cfg(target_arch = "x86_64")]
+pub enum Level4 {}
+
+impl Level for Level1 {}
+impl Level for Level2 {}
+#[cfg(target_arch = "x86_64")]
+impl Level for Level3 {}
+#[cfg(target_arch = "x86_64")]
+impl Level for Level4 {}
+
+pub trait HierarchicalLevel: Level {
+    type NextLevel: Level;
+}
+
+impl HierarchicalLevel for Level2 {
+    type NextLevel = Level1;
+}
+
+#[cfg(target_arch = "x86_64")]
+impl HierarchicalLevel for Level3 {
+    type NextLevel = Level2;
+}
+
+#[cfg(target_arch = "x86_64")]
+impl HierarchicalLevel for Level4 {
+    type NextLevel = Level3;
 }
