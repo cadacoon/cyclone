@@ -15,14 +15,14 @@
 mod pm;
 mod vm;
 
+pub mod pt;
+
 pub use pm::*;
 pub use vm::*;
 
 use spin::Mutex;
 
-pub const GRANULARITY: usize = 4096;
-
 pub static PHYS_MEM: Mutex<PhysicalMemory> = Mutex::new(PhysicalMemory::empty());
 
 #[global_allocator]
-pub static VIRT_MEM: VirtualMemoryScope = VirtualMemoryScope;
+pub static VIRT_MEM: VirtualMemory = VirtualMemory;

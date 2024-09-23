@@ -20,10 +20,10 @@ use crate::{main, mm, multiboot, util};
 
 pub static PHYSMEM: cell::SyncUnsafeCell<[usize; 2048 / usize::BITS as usize]> =
     cell::SyncUnsafeCell::new([0; 2048 / usize::BITS as usize]);
-pub static PTL0: cell::SyncUnsafeCell<mm::PageTable> =
-    cell::SyncUnsafeCell::new(mm::PageTable::new());
-pub static PTL1: cell::SyncUnsafeCell<mm::PageTable> =
-    cell::SyncUnsafeCell::new(mm::PageTable::new());
+pub static PTL0: cell::SyncUnsafeCell<mm::pt::Table<mm::pt::Level2>> =
+    cell::SyncUnsafeCell::new(mm::pt::Table::new());
+pub static PTL1: cell::SyncUnsafeCell<mm::pt::Table<mm::pt::Level1>> =
+    cell::SyncUnsafeCell::new(mm::pt::Table::new());
 
 arch::global_asm!(include_str!("i386_entry.S"), options(att_syntax));
 
@@ -57,7 +57,7 @@ unsafe fn main_bootstrap(
         tmp = out(reg) _,
     );
 
-    // 3. Fix addresses
+    // 3. Fix addresses (use virtual addresses)
     arch::asm!(
         "mov {tmp}, esp",
         "add {tmp}, 0xF0000000",
@@ -68,23 +68,23 @@ unsafe fn main_bootstrap(
         tmp = out(reg) _,
     );
 
-    // 4.1 Init physical memory (minimally)
+    // 4 Init physical memory
+    // 4.1 minimally
     {
         let mut phys_mem = mm::PHYS_MEM.lock();
         *phys_mem = mm::PhysicalMemory::new(
-            unsafe {
+            util::bitmap::Bitmap::new(unsafe {
                 mem::transmute(ptr::slice_from_raw_parts(
                     PHYSMEM.get(),
                     2048 / usize::BITS as usize,
                 ))
-            },
+            }),
             2048,
         );
         phys_mem.mark_used(0, 1024); // system & kernel
     }
 
-    // 4.1 Init physical memory by using the E820 memory map (needs to allocate a
-    // properly sized bitmap)
+    // 4.2 using the E820 memory map (needs to allocate a properly sized bitmap)
     let phys_mem_map = slice::from_raw_parts(
         multiboot_info.mmap_addr as usize as *const multiboot::multiboot_mmap_entry,
         multiboot_info.mmap_length as usize / size_of::<multiboot::multiboot_mmap_entry>(),
@@ -93,13 +93,13 @@ unsafe fn main_bootstrap(
         .iter()
         .filter(|phys_mem_entry| phys_mem_entry.type_ == multiboot::MULTIBOOT_MEMORY_AVAILABLE)
         .map(|phys_mem_entry| {
-            ((phys_mem_entry.addr + phys_mem_entry.len) / mm::GRANULARITY as u64) as usize
+            ((phys_mem_entry.addr + phys_mem_entry.len) / mm::pt::GRANULARITY as u64) as usize
         })
         .max()
         .unwrap();
     let phys_mem_new = mm::PhysicalMemory::new(
         util::bitmap::Bitmap::new(
-            vec![usize::MAX; phys_mem_max / usize::BITS as usize].into_boxed_slice(),
+            vec![usize::MAX; phys_mem_max.div_ceil(usize::BITS as usize)].into_boxed_slice(),
         ),
         0,
     );
@@ -111,8 +111,8 @@ unsafe fn main_bootstrap(
                 continue;
             }
 
-            let frame_start = phys_mem_entry.addr / mm::GRANULARITY as u64;
-            let frame_end = frame_start + (phys_mem_entry.len / mm::GRANULARITY as u64);
+            let frame_start = phys_mem_entry.addr / mm::pt::GRANULARITY as u64;
+            let frame_end = frame_start + (phys_mem_entry.len / mm::pt::GRANULARITY as u64);
             let frames = frame_end - frame_start;
             if frames == 0 {
                 continue;

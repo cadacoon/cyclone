@@ -21,18 +21,18 @@
 
 .global __start
 __start:
-    # save multiboot paramters
+    # Save multiboot paramters
     mov     %eax,       %edi
     mov     %ebx,       %esi
 
-    # initialize stack (use physical addresses)
+    # Initialize stack (use physical addresses)
     mov     $stack_top - 0xF0000000, %eax
     sub     $16,        %eax
     add     $8,         %eax
     mov     %eax,       %esp
     mov     %eax,       %ebp
 
-    # call main with multiboot parameters
+    # Call main with multiboot parameters
     push    %ebp
     mov     %esp,       %ebp
     push    %esi

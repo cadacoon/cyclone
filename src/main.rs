@@ -25,7 +25,7 @@ pub mod sm;
 pub mod util;
 
 fn main() -> ! {
-    loop {}
+    unreachable!()
 }
 
 #[panic_handler]

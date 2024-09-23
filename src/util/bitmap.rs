@@ -17,17 +17,16 @@ use core::{cmp, fmt, ops};
 use alloc::boxed::Box;
 
 pub type BitmapType = usize;
-
 pub struct Bitmap(Box<[BitmapType]>);
 
-unsafe impl Send for Bitmap {}
-
 impl Bitmap {
+    /// Creates a new bitmap
     pub fn new(value: Box<[BitmapType]>) -> Self {
         Self(value)
     }
 
-    pub fn consecutive_zeros(&mut self, fits: usize) -> ConsecutiveZeros {
+    /// Creates an iterator which returns sequences of consecutive zeros
+    pub fn consecutive_zeros(&self, fits: usize) -> ConsecutiveZeros {
         assert!(fits > 0);
         ConsecutiveZeros {
             block: self.0[0],
@@ -38,15 +37,17 @@ impl Bitmap {
         }
     }
 
-    pub fn set_ones<R: ops::RangeBounds<usize>>(&mut self, range: R) {
-        for (block, mask) in Masks::new(range, BitmapType::BITS as usize * self.0.len()) {
-            self.0[block] |= mask;
-        }
-    }
-
+    /// Sets the given range to zero
     pub fn set_zeros<R: ops::RangeBounds<usize>>(&mut self, range: R) {
         for (block, mask) in Masks::new(range, BitmapType::BITS as usize * self.0.len()) {
             self.0[block] &= !mask;
+        }
+    }
+
+    /// Sets the given range to one
+    pub fn set_ones<R: ops::RangeBounds<usize>>(&mut self, range: R) {
+        for (block, mask) in Masks::new(range, BitmapType::BITS as usize * self.0.len()) {
+            self.0[block] |= mask;
         }
     }
 }
@@ -62,6 +63,55 @@ impl fmt::Debug for Bitmap {
             write!(f, " ")?;
         }
         Ok(())
+    }
+}
+
+pub struct ConsecutiveZeros<'owner> {
+    bitmap: &'owner Bitmap,
+    block_index: usize,
+    block: usize,
+    index: usize,
+    fits: usize,
+}
+
+impl<'a> Iterator for ConsecutiveZeros<'a> {
+    type Item = ops::Range<usize>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while self.block_index < self.bitmap.0.len() {
+            if self.block == 0 {
+                let index = self.index;
+                let next_index = (self.block_index + 1) * BitmapType::BITS as usize;
+                if next_index - index >= self.fits {
+                    self.index = next_index;
+                    self.block_index += 1;
+                    self.block = *self.bitmap.0.get(self.block_index).unwrap_or(&0);
+                    return Some(index..next_index);
+                }
+            }
+            while self.block != 0 {
+                let index = self.index;
+                let next_index = self.block_index * (BitmapType::BITS as usize)
+                    + self.block.trailing_zeros() as usize;
+                self.index = next_index + 1;
+                self.block ^= self.block & self.block.wrapping_neg();
+                if next_index - index >= self.fits {
+                    return Some(index..next_index);
+                }
+            }
+            let index = self.index;
+            let next_index = self.index + self.bitmap.0[self.block_index].leading_zeros() as usize;
+            if next_index - index >= self.fits {
+                self.index = next_index;
+                self.block_index += 1;
+                self.block = *self.bitmap.0.get(self.block_index).unwrap_or(&0);
+                return Some(index..next_index);
+            }
+            self.block_index += 1;
+            self.block = *self.bitmap.0.get(self.block_index).unwrap_or(&0);
+        }
+
+        None
     }
 }
 
@@ -130,60 +180,5 @@ impl Iterator for Masks {
 
     fn size_hint(&self) -> (usize, Option<usize>) {
         (self.first_block..=self.last_block).size_hint()
-    }
-}
-
-pub struct ConsecutiveZeros<'a> {
-    bitmap: &'a mut Bitmap,
-    block_index: usize,
-    block: usize,
-    index: usize,
-    fits: usize,
-}
-
-impl<'a> ConsecutiveZeros<'a> {
-    pub fn set_ones<R: ops::RangeBounds<usize>>(&mut self, range: R) {
-        self.bitmap.set_ones(range);
-    }
-}
-
-impl<'a> Iterator for ConsecutiveZeros<'a> {
-    type Item = ops::Range<usize>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        while self.block_index < self.bitmap.0.len() {
-            if self.block == 0 {
-                let index = self.index;
-                let next_index = (self.block_index + 1) * BitmapType::BITS as usize;
-                if next_index - index >= self.fits {
-                    self.index = next_index;
-                    self.block_index += 1;
-                    self.block = *self.bitmap.0.get(self.block_index).unwrap_or(&0);
-                    return Some(index..next_index);
-                }
-            }
-            while self.block != 0 {
-                let index = self.index;
-                let next_index = self.block_index * (BitmapType::BITS as usize)
-                    + self.block.trailing_zeros() as usize;
-                self.index = next_index + 1;
-                self.block ^= self.block & self.block.wrapping_neg();
-                if next_index - index >= self.fits {
-                    return Some(index..next_index);
-                }
-            }
-            let index = self.index;
-            let next_index = self.index + self.bitmap.0[self.block_index].leading_zeros() as usize;
-            if next_index - index >= self.fits {
-                self.index = next_index;
-                self.block_index += 1;
-                self.block = *self.bitmap.0.get(self.block_index).unwrap_or(&0);
-                return Some(index..next_index);
-            }
-            self.block_index += 1;
-            self.block = *self.bitmap.0.get(self.block_index).unwrap_or(&0);
-        }
-
-        None
     }
 }

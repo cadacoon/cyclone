@@ -12,103 +12,69 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use core::{alloc, arch::asm, ops, ptr};
+use core::{alloc, ptr};
 
 use super::PHYS_MEM;
 
-pub struct VirtualMemory {
-    ptl0_phys_addr: usize,
-}
+#[derive(Clone)]
+pub struct VirtualMemory;
 
 impl VirtualMemory {
-    pub fn r#use<F: FnOnce()>(&self, f: F) {
-        let previous_ptl0_phys_addr: usize;
-        unsafe {
-            asm!(
-                "mov {}, cr3",
-                "mov cr3, {}",
-                out(reg) previous_ptl0_phys_addr,
-                in(reg) self.ptl0_phys_addr,
-                options(preserves_flags, nostack)
-            );
+    /// Maps frames to free pages
+    pub fn map(&self, frame_start: usize, frames: usize) -> Option<usize> {
+        let page_start = self.find_free(frames)?;
+        for (page, frame) in
+            (page_start..page_start + frames).zip(frame_start..frame_start + frames)
+        {
+            let page_table = unsafe { &mut *super::pt::ROOT };
+            let page_table = page_table.table_create(page >> 10);
+            let page_table_entry = &mut page_table[page & 0x3FF];
+            if !page_table_entry.free() {
+                panic!("non-contiguous");
+            }
+
+            page_table_entry.map(frame);
         }
-        f();
-        unsafe {
-            asm!(
-                "mov cr3, {}",
-                in(reg) previous_ptl0_phys_addr,
-                options(preserves_flags, nostack)
-            );
-        }
+
+        Some(page_start)
     }
-}
 
-pub struct VirtualMemoryScope;
-
-impl VirtualMemoryScope {
+    /// Allocates free frames and maps them to free pages
     pub fn allocate(&self, pages: usize) -> Option<usize> {
         self.allocate_contiguous(pages)
             .map(|(page_start, _)| page_start)
     }
 
+    /// Allocates free frames and maps them to free pages
     pub fn allocate_contiguous(&self, pages: usize) -> Option<(usize, usize)> {
-        let mut phys_mem = PHYS_MEM.lock();
-
-        // 1. get contiguous free block of physical memory
-        let frame_start = phys_mem.find_free(pages)?;
-
-        // 2. get contiguous free block of virtual memory
-        let page_start = self.find_free(pages)?;
-
-        // 3. commit physical memory
-        phys_mem.mark_used(frame_start, pages);
-
-        // 4. commit virtual memory by writing page table
-        for (page, frame) in (page_start..page_start + pages).zip(frame_start..frame_start + pages)
+        let frame_start;
         {
-            let ptl0_index = page >> 10;
-            let ptl0_entry = unsafe { &mut PageTable::ptl0().0[ptl0_index] };
-            if ptl0_entry.free() {
-                // allocate page table, note that page tables are owned by the address space
-                let ptl1_frame = phys_mem.find_free(1).unwrap();
-                phys_mem.mark_used(ptl1_frame, 1);
-
-                ptl0_entry.map(ptl1_frame);
-            }
-
-            let ptl1_index = page & 0x3FF;
-            let ptl1_entry = unsafe { &mut PageTable::ptl1(ptl0_index).0[ptl1_index] };
-            if !ptl1_entry.free() {
-                panic!("non-contiguous");
-            }
-
-            ptl1_entry.map(frame);
+            let mut phys_mem = PHYS_MEM.lock();
+            frame_start = phys_mem.find_free(pages)?;
+            phys_mem.mark_used(frame_start, pages);
         }
+        let page_start = self.map(frame_start, pages)?;
 
         Some((page_start, frame_start))
     }
 
+    /// Frees pages and frames
     pub fn free(&self, page_start: usize, pages: usize) {
         let mut phys_mem = PHYS_MEM.lock();
-
         for page in page_start..page_start + pages {
-            let ptl0_index = page >> 10;
-            let ptl0_entry = unsafe { &mut PageTable::ptl0().0[ptl0_index] };
-            if ptl0_entry.free() {
+            let page_table = unsafe { &mut *super::pt::ROOT };
+            let page_table = page_table.table(page >> 10).expect("already freed");
+            let page_table_entry = &mut page_table[page & 0x3FF];
+            if page_table_entry.free() {
                 panic!("already freed")
             }
 
-            let ptl1_index = page & 0x3FF;
-            let ptl1_entry = unsafe { &mut PageTable::ptl1(ptl0_index).0[ptl1_index] };
-            if ptl1_entry.free() {
-                panic!("already freed")
-            }
-
-            let frame = ptl1_entry.unmap();
+            let frame = page_table_entry.unmap();
             phys_mem.mark_free(frame, 1);
         }
     }
 
+    /// Finds free pages
     fn find_free(&self, pages: usize) -> Option<usize> {
         let mut page_start = 1;
         let mut consecutive_pages = 0;
@@ -119,16 +85,12 @@ impl VirtualMemoryScope {
             }
             let page = page_start + consecutive_pages;
 
-            let ptl0_index = page >> 10;
-            let ptl0_entry = unsafe { &mut PageTable::ptl0().0[ptl0_index] };
-            if ptl0_entry.free() {
+            let page_table = unsafe { &mut *super::pt::ROOT };
+            let Some(page_table) = page_table.table(page >> 10) else {
                 consecutive_pages += 1024;
                 continue;
-            }
-
-            let ptl1_index = page & 0x3FF;
-            let ptl1_entry = unsafe { &mut PageTable::ptl1(ptl0_index).0[ptl1_index] };
-            if ptl1_entry.free() {
+            };
+            if page_table[page & 0x3FF].free() {
                 consecutive_pages += 1;
                 continue;
             }
@@ -141,7 +103,7 @@ impl VirtualMemoryScope {
     }
 }
 
-unsafe impl alloc::GlobalAlloc for VirtualMemoryScope {
+unsafe impl alloc::GlobalAlloc for VirtualMemory {
     unsafe fn alloc(&self, layout: alloc::Layout) -> *mut u8 {
         let pages = ((layout.size() - 1) >> 12) + 1;
         self.allocate(pages)
@@ -155,62 +117,32 @@ unsafe impl alloc::GlobalAlloc for VirtualMemoryScope {
     }
 }
 
-#[repr(C, align(4096))]
-pub struct PageTable([PageTableEntry; 1024]);
-
-impl PageTable {
-    pub const fn new() -> Self {
-        PageTable([PageTableEntry(0); 1024])
+impl acpi::AcpiHandler for VirtualMemory {
+    unsafe fn map_physical_region<T>(
+        &self,
+        phys_addr: usize,
+        size: usize,
+    ) -> acpi::PhysicalMapping<Self, T> {
+        let virt_addr = if phys_addr <= 0x003F_FFFF {
+            phys_addr
+        } else {
+            let offset = phys_addr % super::pt::GRANULARITY;
+            let page = self
+                .map(
+                    phys_addr / super::pt::GRANULARITY,
+                    size.div_ceil(super::pt::GRANULARITY),
+                )
+                .unwrap();
+            page * super::pt::GRANULARITY + offset
+        };
+        acpi::PhysicalMapping::new(
+            phys_addr,
+            ptr::NonNull::new_unchecked((virt_addr) as *mut T),
+            size,
+            size,
+            Self,
+        )
     }
 
-    unsafe fn ptl0() -> &'static mut Self {
-        // self-reference
-        Self::ptl1(0x3FF)
-    }
-
-    unsafe fn ptl1(ptl0_index: usize) -> &'static mut Self {
-        // self-reference
-        &mut *((((0x3FF << 10) | ptl0_index) << 12) as *mut PageTable)
-    }
-}
-
-impl ops::Index<usize> for PageTable {
-    type Output = PageTableEntry;
-
-    fn index(&self, index: usize) -> &Self::Output {
-        &self.0[index]
-    }
-}
-
-impl ops::IndexMut<usize> for PageTable {
-    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        &mut self.0[index]
-    }
-}
-
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct PageTableEntry(u32);
-
-impl PageTableEntry {
-    const FREE: u32 = 0;
-    const PRESENT: u32 = 1 << 0;
-    const WRITEABLE: u32 = 1 << 1;
-
-    #[inline(always)]
-    pub fn free(&self) -> bool {
-        self.0 == Self::FREE
-    }
-
-    #[inline(always)]
-    pub fn map(&mut self, frame: usize) {
-        self.0 = (frame << 12) as u32 | Self::PRESENT | Self::WRITEABLE;
-    }
-
-    #[inline(always)]
-    pub fn unmap(&mut self) -> usize {
-        let frame = (self.0 >> 12) as usize;
-        self.0 = Self::FREE;
-        frame
-    }
+    fn unmap_physical_region<T>(_region: &acpi::PhysicalMapping<Self, T>) {}
 }
