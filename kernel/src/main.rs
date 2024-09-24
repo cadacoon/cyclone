@@ -37,6 +37,11 @@ mod multiboot {
     include!(concat!(env!("OUT_DIR"), "/multiboot.rs"));
 }
 
+extern "C" {
+    static KERNEL_LMA: u8;
+    static KERNEL_VMA: u8;
+}
+
 #[cfg(target_arch = "x86")]
 arch::global_asm!(include_str!("x86.S"), options(att_syntax));
 #[cfg(target_arch = "x86_64")]
@@ -44,14 +49,17 @@ arch::global_asm!(include_str!("x86_64.S"), options(att_syntax));
 
 #[no_mangle]
 fn main(_multiboot_magic: u32, multiboot_info: u32) -> ! {
-    let multiboot_info =
-        unsafe { &*((multiboot_info as usize) as *const multiboot::multiboot_info) };
+    let multiboot_infow = unsafe {
+        &*((multiboot_info as usize + (&KERNEL_VMA as *const u8 as usize))
+            as *const multiboot::multiboot_info)
+    };
 
     init_phys_mem_bare();
     init_phys_mem_e820(unsafe {
         slice::from_raw_parts(
-            (multiboot_info.mmap_addr as usize) as *const multiboot::multiboot_mmap_entry,
-            multiboot_info.mmap_length as usize / size_of::<multiboot::multiboot_mmap_entry>(),
+            (multiboot_infow.mmap_addr as usize + (&KERNEL_VMA as *const u8 as usize))
+                as *const multiboot::multiboot_mmap_entry,
+            multiboot_infow.mmap_length as usize / size_of::<multiboot::multiboot_mmap_entry>(),
         )
     });
 

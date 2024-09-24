@@ -25,21 +25,37 @@ __start:
     mov     %eax,           %edi
     mov     %ebx,           %esi
 
-    # PTL1: identity
+    # Fill page table 1
     mov     $ptl1 - 0xFFFFFFFF80000000, %eax
     mov     $0x3,           %ecx # flags: present, write
 1:
     mov     %ecx,           (%eax)
-    add     $4,             %eax
+    add     $8,             %eax
     add     $0x00001000,    %ecx
     cmp     $0x00400003,    %ecx
     jnz     1b
 
-    # PTL2
+    # Fill page table 2
     mov     $ptl2 - 0xFFFFFFFF80000000, %eax
-    movl    $0x0010C003,    0x000(%eax) # identity
-    movl    $0x0010C003,    0xF00(%eax) # system & kernel
-    movl    $0x0010B003,    0xFFC(%eax) # recursive
+    movl    $ptl1 - 0xFFFFFFFF80000000, 0x000(%eax) # identity
+
+    # Fill page table 3
+    mov     $ptl3_identity - 0xFFFFFFFF80000000, %eax
+    movl    $ptl2 - 0xFFFFFFFF80000000, 0x000(%eax) # identity
+    mov     $ptl3 - 0xFFFFFFFF80000000, %eax
+    movl    $ptl2 - 0xFFFFFFFF80000000, 0xFF0(%eax) # identity
+
+    # Fill page table 4
+    mov     $ptl4 - 0xFFFFFFFF80000000, %eax
+    movl    $ptl4 - 0xFFFFFFFF80000000 + 0x3, 0xFF4(%eax) # self-reference
+    movl    $ptl3_identity - 0xFFFFFFFF80000000, 0x000(%eax) # identity
+    movl    $ptl3 - 0xFFFFFFFF80000000, 0xFF8(%eax) # system & kernel
+
+    # Enable long mode
+    mov     $0xC0000080,    %ecx
+    rdmsr
+    or      $0x00000100,    %ecx
+    wrmsr
 
     # Enable paging
     mov     %eax,           %cr3
@@ -47,18 +63,18 @@ __start:
     or      $0x80010000,    %eax
     mov     %eax,           %cr0
 
-    # Init stack
-    mov     $stack_top,     %eax
-    sub     $16,            %eax
-    add     $8,             %eax
-    mov     %eax,           %esp
-    mov     %eax,           %ebp
-
+.code64
     # Call main with multiboot parameters
-    push    %ebp
-    mov     %esp,           %ebp
-    push    %esi
-    push    %edi
+    mov     $stack_top,     %rax
+    sub     $16,            %rax
+    add     $8,             %rax
+    mov     %rax,           %rsp
+    mov     %rax,           %rbp
+
+    push    %rbp
+    mov     %rsp,           %rbp
+    push    %rsi
+    push    %rdi
     call    main
 
 .section .bss
@@ -66,6 +82,14 @@ __start:
 stack_bottom:
     .zero 16384
 stack_top:
+
+.align 4096
+ptl4:
+    .zero 4096
+ptl3_identity:
+    .zero 4096
+ptl3:
+    .zero 4096
 ptl2:
     .zero 4096
 ptl1:

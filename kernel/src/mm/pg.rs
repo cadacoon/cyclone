@@ -3,20 +3,24 @@ use core::{marker, ops};
 pub const GRANULARITY: usize = 0x1000;
 
 #[cfg(target_arch = "x86")]
-pub const PAGE_TABLE: *mut Table<Level2> = 0xFFFFF000 as *mut _;
+pub const PAGE_TABLE: *mut PageTable<Level2> = 0xFFFFF000 as *mut _;
 #[cfg(target_arch = "x86_64")]
-pub const PAGE_TABLE: *mut Table<Level4> = 0xFFFFFFFFFFFFF000 as *mut _;
+pub const PAGE_TABLE: *mut PageTable<Level4> = 0xFFFFFFFFFFFFF000 as *mut _;
+
+#[repr(transparent)]
+#[derive(Clone, Copy)]
+pub struct Page(pub usize);
 
 #[repr(C, align(4096))]
-pub struct Table<L: Level> {
+pub struct PageTable<L: Level> {
     #[cfg(target_arch = "x86")]
-    entries: [Entry; 1024],
+    entries: [PageTableEntry; 1024],
     #[cfg(target_arch = "x86_64")]
-    entries: [Entry; 512],
+    entries: [PageTableEntry; 512],
     level: marker::PhantomData<L>,
 }
 
-impl<L> Table<L>
+impl<L> PageTable<L>
 where
     L: Level,
 {
@@ -27,63 +31,63 @@ where
     }
 }
 
-impl<L> ops::Index<usize> for Table<L>
+impl<L> ops::Index<Page> for PageTable<L>
 where
     L: Level,
 {
-    type Output = Entry;
+    type Output = PageTableEntry;
 
-    fn index(&self, index: usize) -> &Self::Output {
-        &self.entries[index]
+    fn index(&self, index: Page) -> &Self::Output {
+        &self.entries[L::index(index)]
     }
 }
 
-impl<L> ops::IndexMut<usize> for Table<L>
+impl<L> ops::IndexMut<Page> for PageTable<L>
 where
     L: Level,
 {
-    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        &mut self.entries[index]
+    fn index_mut(&mut self, index: Page) -> &mut Self::Output {
+        &mut self.entries[L::index(index)]
     }
 }
 
-impl<L> Table<L>
+impl<L> PageTable<L>
 where
     L: HierarchicalLevel,
 {
-    pub fn table(&mut self, index: usize) -> Option<&mut Table<L::NextLevel>> {
-        let entry = self.entries[index];
+    pub fn table(&mut self, page: Page) -> Option<&mut PageTable<L::NextLevel>> {
+        let entry = self.entries[L::index(page)];
         if entry.free() {
             return None;
         }
 
         let addr = self as *mut _ as usize;
         #[cfg(target_arch = "x86")]
-        let next_addr = addr << 10 | (index << 12);
+        let next_addr = addr << 10 | (L::index(page) << 12);
         #[cfg(target_arch = "x86_64")]
-        let next_addr = addr << 9 | (index << 12);
-        Some(unsafe { &mut *(next_addr as *mut Table<L::NextLevel>) })
+        let next_addr = addr << 9 | (L::index(page) << 12);
+        Some(unsafe { &mut *(next_addr as *mut PageTable<L::NextLevel>) })
     }
 
-    pub fn table_create(&mut self, index: usize) -> &mut Table<L::NextLevel> {
-        if self.table(index).is_none() {
+    pub fn table_create(&mut self, page: Page) -> &mut PageTable<L::NextLevel> {
+        if self.table(page).is_none() {
             let mut phys_mem = super::PHYS_MEM.lock();
             let frame = phys_mem.find_free(1).unwrap();
             phys_mem.mark_used(frame, 1);
 
-            self.entries[index].map(frame);
-            unsafe { self.table(index).unwrap_unchecked() }.init();
+            self.entries[L::index(page)].map(frame);
+            unsafe { self.table(page).unwrap_unchecked() }.init();
         }
 
-        unsafe { self.table(index).unwrap_unchecked() }
+        unsafe { self.table(page).unwrap_unchecked() }
     }
 }
 
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct Entry(u32);
+pub struct PageTableEntry(u32);
 
-impl Entry {
+impl PageTableEntry {
     const FREE: u32 = 0;
     const PRESENT: u32 = 1 << 0;
     const WRITEABLE: u32 = 1 << 1;
@@ -106,7 +110,9 @@ impl Entry {
     }
 }
 
-pub trait Level {}
+pub trait Level {
+    fn index(page: Page) -> usize;
+}
 
 pub enum Level1 {}
 pub enum Level2 {}
@@ -115,12 +121,28 @@ pub enum Level3 {}
 #[cfg(target_arch = "x86_64")]
 pub enum Level4 {}
 
-impl Level for Level1 {}
-impl Level for Level2 {}
+impl Level for Level1 {
+    fn index(page: Page) -> usize {
+        (page.0 >> 0) & 0x3FF
+    }
+}
+impl Level for Level2 {
+    fn index(page: Page) -> usize {
+        (page.0 >> 10) & 0x3FF
+    }
+}
 #[cfg(target_arch = "x86_64")]
-impl Level for Level3 {}
+impl Level for Level3 {
+    fn index(page: Page) -> usize {
+        (page.0 >> 18) & 0x1FF
+    }
+}
 #[cfg(target_arch = "x86_64")]
-impl Level for Level4 {}
+impl Level for Level4 {
+    fn index(page: Page) -> usize {
+        (page.0 >> 27) & 0x1FF
+    }
+}
 
 pub trait HierarchicalLevel: Level {
     type NextLevel: Level;

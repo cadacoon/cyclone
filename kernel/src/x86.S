@@ -25,7 +25,7 @@ __start:
     mov     %eax,           %edi
     mov     %ebx,           %esi
 
-    # PTL1: identity
+    # Fill page table 1
     mov     $ptl1 - 0xC0000000, %eax
     mov     $0x3,           %ecx # flags: present, write
 1:
@@ -35,11 +35,11 @@ __start:
     cmp     $0x00400003,    %ecx
     jnz     1b
 
-    # PTL2
+    # Fill page table 2
     mov     $ptl2 - 0xC0000000, %eax
-    movl    $0x0010C003,    0x000(%eax) # identity
-    movl    $0x0010C003,    0xC00(%eax) # system & kernel
-    movl    $0x0010B003,    0xFFC(%eax) # recursive
+    movl    $ptl2 - 0xC0000000 + 0x3, 0xFFC(%eax) # self-reference
+    movl    $ptl1 - 0xC0000000 + 0x3, 0x000(%eax) # identity
+    movl    $ptl1 - 0xC0000000 + 0x3, 0xC00(%eax) # system & kernel
 
     # Enable paging
     mov     %eax,           %cr3
@@ -47,14 +47,13 @@ __start:
     or      $0x80010000,    %eax
     mov     %eax,           %cr0
 
-    # Init stack
+    # Call main with multiboot parameters
     mov     $stack_top,     %eax
     sub     $16,            %eax
     add     $8,             %eax
     mov     %eax,           %esp
     mov     %eax,           %ebp
 
-    # Call main with multiboot parameters
     push    %ebp
     mov     %esp,           %ebp
     push    %esi
@@ -66,6 +65,8 @@ __start:
 stack_bottom:
     .zero 16384
 stack_top:
+
+.align 4096
 ptl2:
     .zero 4096
 ptl1:

@@ -29,9 +29,10 @@ impl VirtualMemory {
         for (page, frame) in
             (page_start..page_start + frames).zip(frame_start..frame_start + frames)
         {
+            let page = super::pg::Page(page);
             let page_table = unsafe { &mut *super::pg::PAGE_TABLE };
-            let page_table = page_table.table_create(page >> 10);
-            let page_table_entry = &mut page_table[page & 0x3FF];
+            let page_table = page_table.table_create(page);
+            let page_table_entry = &mut page_table[page];
             if !page_table_entry.free() {
                 panic!("non-contiguous");
             }
@@ -65,9 +66,10 @@ impl VirtualMemory {
     pub fn free(&self, page_start: usize, pages: usize) {
         let mut phys_mem = PHYS_MEM.lock();
         for page in page_start..page_start + pages {
+            let page = super::pg::Page(page);
             let page_table = unsafe { &mut *super::pg::PAGE_TABLE };
-            let page_table = page_table.table(page >> 10).expect("already freed");
-            let page_table_entry = &mut page_table[page & 0x3FF];
+            let page_table = page_table.table(page).expect("already freed");
+            let page_table_entry = &mut page_table[page];
             if page_table_entry.free() {
                 panic!("already freed")
             }
@@ -86,14 +88,14 @@ impl VirtualMemory {
             if page_start + pages > 0xFFFFF {
                 return None;
             }
-            let page = page_start + consecutive_pages;
 
+            let page = super::pg::Page(page_start + consecutive_pages);
             let page_table = unsafe { &mut *super::pg::PAGE_TABLE };
-            let Some(page_table) = page_table.table(page >> 10) else {
+            let Some(page_table) = page_table.table(page) else {
                 consecutive_pages += 1024;
                 continue;
             };
-            if page_table[page & 0x3FF].free() {
+            if page_table[page].free() {
                 consecutive_pages += 1;
                 continue;
             }
@@ -126,18 +128,14 @@ impl acpi::AcpiHandler for VirtualMemory {
         phys_addr: usize,
         size: usize,
     ) -> acpi::PhysicalMapping<Self, T> {
-        let virt_addr = if phys_addr <= 0x003F_FFFF {
-            phys_addr
-        } else {
-            let offset = phys_addr % super::pg::GRANULARITY;
-            let page = self
-                .map(
-                    phys_addr / super::pg::GRANULARITY,
-                    size.div_ceil(super::pg::GRANULARITY),
-                )
-                .unwrap();
-            page * super::pg::GRANULARITY + offset
-        };
+        let offset = phys_addr % super::pg::GRANULARITY;
+        let page = self
+            .map(
+                phys_addr / super::pg::GRANULARITY,
+                size.div_ceil(super::pg::GRANULARITY),
+            )
+            .unwrap();
+        let virt_addr = page * super::pg::GRANULARITY + offset;
         acpi::PhysicalMapping::new(
             phys_addr,
             ptr::NonNull::new_unchecked((virt_addr) as *mut T),
