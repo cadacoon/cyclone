@@ -1,8 +1,8 @@
 #!/bin/sh
 
-kernel = target/x86_64-unknown-cyclone/debug/cyclone_kernel
+kernel=target/x86_64-unknown-meerkat/debug/meerkat_kernel
 
-cargo build -p cyclone_kernel --target x86_64-unknown-cyclone.json
+cargo build -p meerkat_kernel --target x86_64-unknown-meerkat.json
 objcopy -O binary $kernel $kernel.bin
 qemu-system-x86_64 \
     -m 8G \
