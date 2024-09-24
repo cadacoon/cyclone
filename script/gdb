@@ -1,3 +1,2 @@
-set arch i386:x86-64
-file target/i386/debug/meerkat_kernel
+file target/i386-unknown-meerkat/debug/meerkat_kernel
 target remote localhost:1234

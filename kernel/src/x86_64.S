@@ -1,92 +1,101 @@
-# Copyright 2024 Kevin Ludwig
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+// Copyright 2024 Kevin Ludwig
+//
+// Licensed under the Apache License, Version 2.0 (the "License")//
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
-.extern main
+    .extern main
 
-.code32
-.align 8
+    .code32
+    .align 8
 
-.section .multiboot.init, "a"
+    .section .multiboot.init, "a"
 
-.global __start
+    .global __start
 __start:
-    # Save multiboot paramters
-    mov     %eax,           %edi
-    mov     %ebx,           %esi
+    // Save multiboot paramters
+    mov edi, eax
+    mov esi, ebx
 
-    # Fill page table 1
-    mov     $ptl1 - 0xFFFFFFFF80000000, %eax
-    mov     $0x3,           %ecx # flags: present, write
-1:
-    mov     %ecx,           (%eax)
-    add     $8,             %eax
-    add     $0x00001000,    %ecx
-    cmp     $0x00400003,    %ecx
-    jnz     1b
-
-    # Fill page table 2
-    mov     $ptl2 - 0xFFFFFFFF80000000, %eax
-    movl    $ptl1 - 0xFFFFFFFF80000000, 0x000(%eax) # identity
-
-    # Fill page table 3
-    mov     $ptl3_identity - 0xFFFFFFFF80000000, %eax
-    movl    $ptl2 - 0xFFFFFFFF80000000, 0x000(%eax) # identity
-    mov     $ptl3 - 0xFFFFFFFF80000000, %eax
-    movl    $ptl2 - 0xFFFFFFFF80000000, 0xFF0(%eax) # identity
-
-    # Fill page table 4
-    mov     $ptl4 - 0xFFFFFFFF80000000, %eax
-    movl    $ptl4 - 0xFFFFFFFF80000000 + 0x3, 0xFF4(%eax) # self-reference
-    movl    $ptl3_identity - 0xFFFFFFFF80000000, 0x000(%eax) # identity
-    movl    $ptl3 - 0xFFFFFFFF80000000, 0xFF8(%eax) # system & kernel
-
-    # Enable long mode
-    mov     $0xC0000080,    %ecx
+    // Enable long mode
+    mov   ecx, 0xC0000080 // EFER MSR
     rdmsr
-    or      $0x00000100,    %ecx
+    or    eax, 0x00000100 // LME
     wrmsr
 
-    # Enable paging
-    mov     %eax,           %cr3
-    mov     %cr0,           %eax
-    or      $0x80010000,    %eax
-    mov     %eax,           %cr0
+    // Enable PAE
+    mov eax, cr4
+    or  eax, 0x00000020 // PAE
+    mov cr4, eax
 
-.code64
-    # Call main with multiboot parameters
-    mov     $stack_top,     %rax
-    sub     $16,            %rax
-    add     $8,             %rax
-    mov     %rax,           %rsp
-    mov     %rax,           %rbp
+    // Fill page table 1
+    mov eax, offset ptl1 - 0xFFFFFFFF80000000
+    mov ecx, 0x3                              // P R/W
+1:
+    mov [eax], ecx
+    add eax  , 8
+    add ecx  , 0x00001000
+    cmp ecx  , 0x00200003
+    jnz 1b
 
-    push    %rbp
-    mov     %rsp,           %rbp
-    push    %rsi
-    push    %rdi
-    call    main
+    // Fill page table 2
+    mov eax                   , offset ptl2 - 0xFFFFFFFF80000000
+    mov long ptr [eax + 0x000], offset ptl1 - 0xFFFFFFFF80000000 + 0x3 // P R/W 000: 1
 
-.section .bss
+    // Fill page table 3i
+    mov eax                   , offset ptl3i - 0xFFFFFFFF80000000
+    mov long ptr [eax + 0x000], offset ptl2 - 0xFFFFFFFF80000000 + 0x3 // P R/W 000: 2
 
+    // Fill page table 3
+    mov eax                   , offset ptl3 - 0xFFFFFFFF80000000
+    mov long ptr [eax + 0xFF0], offset ptl2 - 0xFFFFFFFF80000000 + 0x3 // P R/W 776: 2
+
+    // Fill page table 4
+    mov eax                   , offset ptl4  - 0xFFFFFFFF80000000
+    mov long ptr [eax + 0xFF0], offset ptl4  - 0xFFFFFFFF80000000 + 0x3 // P R/W 776: 4
+    mov long ptr [eax + 0x000], offset ptl3i - 0xFFFFFFFF80000000 + 0x3 // P R/W 000: 3i
+    mov long ptr [eax + 0xFF8], offset ptl3  - 0xFFFFFFFF80000000 + 0x3 // P R/W 777: 3
+    mov cr3, eax
+
+    // Enable paging
+    mov eax, cr0
+    or  eax, 0x80010000 // PG WP
+    mov cr0, eax
+
+    .code64
+
+    // Call main with multiboot parameters
+    mov rax, offset stack_top
+    sub rax, 16
+    add rax, 8
+    mov rsp, rax
+    mov rbp, rax
+
+    push rbp
+    mov  rbp, rsp
+    push rsi
+    push rdi
+    call main
+
+    .section .bss
+
+    .align 16384
 stack_bottom:
     .zero 16384
 stack_top:
 
-.align 4096
+    .align 4096
 ptl4:
     .zero 4096
-ptl3_identity:
+ptl3i:
     .zero 4096
 ptl3:
     .zero 4096

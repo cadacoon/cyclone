@@ -5,7 +5,7 @@ pub const GRANULARITY: usize = 0x1000;
 #[cfg(target_arch = "x86")]
 pub const PAGE_TABLE: *mut PageTable<Level2> = 0xFFFFF000 as *mut _;
 #[cfg(target_arch = "x86_64")]
-pub const PAGE_TABLE: *mut PageTable<Level4> = 0xFFFFFFFFFFFFF000 as *mut _;
+pub const PAGE_TABLE: *mut PageTable<Level4> = 0o776_776_776_776_0000 as *mut _;
 
 #[repr(transparent)]
 #[derive(Clone, Copy)]
@@ -123,24 +123,32 @@ pub enum Level4 {}
 
 impl Level for Level1 {
     fn index(page: Page) -> usize {
-        (page.0 >> 0) & 0x3FF
+        if cfg!(target_arch = "x86") {
+            (page.0 >> (10 * 0)) & ((1 << 10) - 1)
+        } else {
+            (page.0 >> (9 * 0)) & ((1 << 9) - 1)
+        }
     }
 }
 impl Level for Level2 {
     fn index(page: Page) -> usize {
-        (page.0 >> 10) & 0x3FF
+        if cfg!(target_arch = "x86") {
+            (page.0 >> (10 * 1)) & ((1 << 10) - 1)
+        } else {
+            (page.0 >> (9 * 1)) & ((1 << 9) - 1)
+        }
     }
 }
 #[cfg(target_arch = "x86_64")]
 impl Level for Level3 {
     fn index(page: Page) -> usize {
-        (page.0 >> 18) & 0x1FF
+        (page.0 >> (9 * 2)) & ((1 << 9) - 1)
     }
 }
 #[cfg(target_arch = "x86_64")]
 impl Level for Level4 {
     fn index(page: Page) -> usize {
-        (page.0 >> 27) & 0x1FF
+        (page.0 >> (9 * 3)) & ((1 << 9) - 1)
     }
 }
 

@@ -16,22 +16,23 @@ use core::{cmp, fmt, ops};
 
 use alloc::boxed::Box;
 
-pub type BitmapType = usize;
-pub struct Bitmap(Box<[BitmapType]>);
+pub type Block = usize;
+pub struct Bitmap(Box<[Block]>);
 
 impl Bitmap {
     /// Creates a new bitmap
-    pub const fn new(value: Box<[BitmapType]>) -> Self {
+    pub const fn new(value: Box<[Block]>) -> Self {
         Self(value)
     }
 
     /// Creates an iterator which returns sequences of consecutive zeros
     pub fn consecutive_zeros(&self, fits: usize) -> ConsecutiveZeros {
         assert!(fits > 0);
+
         ConsecutiveZeros {
-            block: self.0[0],
             bitmap: self,
             block_index: 0,
+            block: self.0[0],
             index: 0,
             fits,
         }
@@ -39,14 +40,14 @@ impl Bitmap {
 
     /// Sets the given range to zero
     pub fn set_zeros<R: ops::RangeBounds<usize>>(&mut self, range: R) {
-        for (block, mask) in Masks::new(range, BitmapType::BITS as usize * self.0.len()) {
+        for (block, mask) in Masks::new(range, Block::BITS as usize * self.0.len()) {
             self.0[block] &= !mask;
         }
     }
 
     /// Sets the given range to one
     pub fn set_ones<R: ops::RangeBounds<usize>>(&mut self, range: R) {
-        for (block, mask) in Masks::new(range, BitmapType::BITS as usize * self.0.len()) {
+        for (block, mask) in Masks::new(range, Block::BITS as usize * self.0.len()) {
             self.0[block] |= mask;
         }
     }
@@ -69,7 +70,7 @@ impl fmt::Debug for Bitmap {
 pub struct ConsecutiveZeros<'owner> {
     bitmap: &'owner Bitmap,
     block_index: usize,
-    block: usize,
+    block: Block,
     index: usize,
     fits: usize,
 }
@@ -81,7 +82,7 @@ impl<'a> Iterator for ConsecutiveZeros<'a> {
         while self.block_index < self.bitmap.0.len() {
             if self.block == 0 {
                 let index = self.index;
-                let next_index = (self.block_index + 1) * BitmapType::BITS as usize;
+                let next_index = (self.block_index + 1) * Block::BITS as usize;
                 if next_index - index >= self.fits {
                     self.index = next_index;
                     self.block_index += 1;
@@ -91,7 +92,7 @@ impl<'a> Iterator for ConsecutiveZeros<'a> {
             }
             while self.block != 0 {
                 let index = self.index;
-                let next_index = self.block_index * (BitmapType::BITS as usize)
+                let next_index = self.block_index * (Block::BITS as usize)
                     + self.block.trailing_zeros() as usize;
                 self.index = next_index + 1;
                 self.block ^= self.block & self.block.wrapping_neg();
@@ -116,10 +117,10 @@ impl<'a> Iterator for ConsecutiveZeros<'a> {
 }
 
 struct Masks {
-    first_block: usize,
-    first_mask: BitmapType,
-    last_block: usize,
-    last_mask: BitmapType,
+    first_index: usize,
+    first_mask: Block,
+    last_index: usize,
+    last_mask: Block,
 }
 
 impl Masks {
@@ -137,41 +138,41 @@ impl Masks {
         assert!(end > start);
         assert!(end <= length);
 
-        let first_block = start / BitmapType::BITS as usize;
-        let first_mask = BitmapType::MAX << (start % BitmapType::BITS as usize);
-        let last_block = end / BitmapType::BITS as usize;
-        let last_mask = (BitmapType::MAX >> 1)
-            >> (BitmapType::BITS - (end % BitmapType::BITS as usize) as u32 - 1);
+        let first_index = start / Block::BITS as usize;
+        let first_mask = Block::MAX << (start % Block::BITS as usize);
+        let last_index = end / Block::BITS as usize;
+        let last_mask =
+            (Block::MAX >> 1) >> (Block::BITS - (end % Block::BITS as usize) as u32 - 1);
 
         Self {
-            first_block,
+            first_index,
             first_mask,
             last_mask,
-            last_block,
+            last_index,
         }
     }
 }
 
 impl Iterator for Masks {
-    type Item = (usize, BitmapType);
+    type Item = (usize, Block);
 
     fn next(&mut self) -> Option<Self::Item> {
-        match self.first_block.cmp(&self.last_block) {
+        match self.first_index.cmp(&self.last_index) {
             cmp::Ordering::Less => {
-                let block = self.first_block;
+                let index = self.first_index;
                 let mask = self.first_mask;
-                self.first_block += 1;
+                self.first_index += 1;
                 self.first_mask = !0;
-                Some((block, mask))
+                Some((index, mask))
             }
             cmp::Ordering::Equal => {
-                let block = self.first_block;
+                let index = self.first_index;
                 let mask = self.first_mask & self.last_mask;
-                self.first_block += 1;
+                self.first_index += 1;
                 if mask == 0 {
                     None
                 } else {
-                    Some((block, mask))
+                    Some((index, mask))
                 }
             }
             cmp::Ordering::Greater => None,
@@ -179,6 +180,6 @@ impl Iterator for Masks {
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        (self.first_block..=self.last_block).size_hint()
+        (self.first_index..=self.last_index).size_hint()
     }
 }
