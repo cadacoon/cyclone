@@ -10,6 +10,7 @@
   "linker": "rust-lld",
   "linker-flavor": "ld.lld",
   "cpu": "x86-64",
+  "features": "-sse,+soft-float",
   "dynamic-linking": false,
   "executables": true,
   "relocation-model": "static",

@@ -47,6 +47,23 @@ __start:
     or  eax, 0x80010000 // PG WP
     mov cr0, eax
 
+    // Load GDT
+    lgdt gdtr
+
+    // Reload CS
+    //jmp 8, main
+    .byte 0xEA
+    .long 2f
+    .short 0x0008
+2:
+    // Reload DS
+    mov eax, 16
+    mov ds, eax
+    mov es, eax
+    mov fs, eax
+    mov gs, eax
+    mov ss, eax
+
     // Call main with multiboot parameters
     mov eax, offset stack_top
     sub eax, 16
@@ -59,6 +76,10 @@ __start:
     push esi
     push edi
     call main
+
+gdtr:
+    .short (8 * 6) - 1
+    .long DESCRIPTOR_TABLE
 
     .section .bss
 

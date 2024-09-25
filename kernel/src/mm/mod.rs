@@ -16,6 +16,7 @@ mod pm;
 mod vm;
 
 pub mod pg;
+pub mod sm;
 
 pub use pm::*;
 pub use vm::*;

@@ -31,6 +31,10 @@ impl VirtualMemory {
         {
             let page = super::pg::Page(page);
             let page_table = unsafe { &mut *super::pg::PAGE_TABLE };
+            #[cfg(target_arch = "x86_64")]
+            let page_table = page_table.table_create(page);
+            #[cfg(target_arch = "x86_64")]
+            let page_table = page_table.table_create(page);
             let page_table = page_table.table_create(page);
             let page_table_entry = &mut page_table[page];
             if !page_table_entry.free() {
@@ -68,6 +72,10 @@ impl VirtualMemory {
         for page in page_start..page_start + pages {
             let page = super::pg::Page(page);
             let page_table = unsafe { &mut *super::pg::PAGE_TABLE };
+            #[cfg(target_arch = "x86_64")]
+            let page_table = page_table.table(page).expect("already freed");
+            #[cfg(target_arch = "x86_64")]
+            let page_table = page_table.table(page).expect("already freed");
             let page_table = page_table.table(page).expect("already freed");
             let page_table_entry = &mut page_table[page];
             if page_table_entry.free() {
@@ -85,14 +93,26 @@ impl VirtualMemory {
         let mut consecutive_pages = 0;
         while consecutive_pages < pages {
             // not enough remaining pages
-            if page_start + pages > 0xFFFFF {
+            if page_start + pages > super::pg::PAGES_TOTAL {
                 return None;
             }
 
             let page = super::pg::Page(page_start + consecutive_pages);
             let page_table = unsafe { &mut *super::pg::PAGE_TABLE };
+            #[cfg(target_arch = "x86_64")]
             let Some(page_table) = page_table.table(page) else {
-                consecutive_pages += 1024;
+                consecutive_pages += super::pg::PAGES_PER_TABLE
+                    * super::pg::PAGES_PER_TABLE
+                    * super::pg::PAGES_PER_TABLE;
+                continue;
+            };
+            #[cfg(target_arch = "x86_64")]
+            let Some(page_table) = page_table.table(page) else {
+                consecutive_pages += super::pg::PAGES_PER_TABLE * super::pg::PAGES_PER_TABLE;
+                continue;
+            };
+            let Some(page_table) = page_table.table(page) else {
+                consecutive_pages += super::pg::PAGES_PER_TABLE;
                 continue;
             };
             if page_table[page].free() {
@@ -110,15 +130,15 @@ impl VirtualMemory {
 
 unsafe impl alloc::GlobalAlloc for VirtualMemory {
     unsafe fn alloc(&self, layout: alloc::Layout) -> *mut u8 {
-        let pages = ((layout.size() - 1) >> 12) + 1;
-        self.allocate(pages)
+        self.allocate(layout.size().div_ceil(super::pg::BYTES_PER_PAGE))
             .map_or(ptr::null_mut(), |page_start| (page_start << 12) as *mut u8)
     }
 
-    unsafe fn dealloc(&self, ptr: *mut u8, layout: alloc::Layout) {
-        let page_start = ((ptr as usize - 1) >> 12) + 1;
-        let pages = ((layout.size() - 1) >> 12) + 1;
-        self.free(page_start, pages);
+    unsafe fn dealloc(&self, virt_addr: *mut u8, layout: alloc::Layout) {
+        self.free(
+            virt_addr as usize / super::pg::BYTES_PER_PAGE,
+            layout.size().div_ceil(super::pg::BYTES_PER_PAGE),
+        );
     }
 }
 
@@ -128,14 +148,14 @@ impl acpi::AcpiHandler for VirtualMemory {
         phys_addr: usize,
         size: usize,
     ) -> acpi::PhysicalMapping<Self, T> {
-        let offset = phys_addr % super::pg::GRANULARITY;
+        let offset = phys_addr % super::pg::BYTES_PER_PAGE;
         let page = self
             .map(
-                phys_addr / super::pg::GRANULARITY,
-                size.div_ceil(super::pg::GRANULARITY),
+                phys_addr / super::pg::BYTES_PER_PAGE,
+                size.div_ceil(super::pg::BYTES_PER_PAGE),
             )
             .unwrap();
-        let virt_addr = page * super::pg::GRANULARITY + offset;
+        let virt_addr = page * super::pg::BYTES_PER_PAGE + offset;
         acpi::PhysicalMapping::new(
             phys_addr,
             ptr::NonNull::new_unchecked((virt_addr) as *mut T),

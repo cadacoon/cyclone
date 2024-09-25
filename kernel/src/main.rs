@@ -63,7 +63,7 @@ fn main(_multiboot_magic: u32, multiboot_info: u32) -> ! {
         )
     });
 
-    loop {}
+    unreachable!()
 }
 
 #[panic_handler]
@@ -93,7 +93,7 @@ fn init_phys_mem_e820(phys_mem_map: &[multiboot::multiboot_mmap_entry]) {
         .iter()
         .filter(|phys_mem_entry| phys_mem_entry.type_ == multiboot::MULTIBOOT_MEMORY_AVAILABLE)
         .map(|phys_mem_entry| {
-            ((phys_mem_entry.addr + phys_mem_entry.len) / mm::pg::GRANULARITY as u64) as usize
+            ((phys_mem_entry.addr + phys_mem_entry.len) / mm::pg::BYTES_PER_PAGE as u64) as usize
         })
         .max()
         .unwrap();
@@ -111,8 +111,8 @@ fn init_phys_mem_e820(phys_mem_map: &[multiboot::multiboot_mmap_entry]) {
             continue;
         }
 
-        let frame_start = phys_mem_entry.addr / mm::pg::GRANULARITY as u64;
-        let frame_end = frame_start + (phys_mem_entry.len / mm::pg::GRANULARITY as u64);
+        let frame_start = phys_mem_entry.addr / mm::pg::BYTES_PER_PAGE as u64;
+        let frame_end = frame_start + (phys_mem_entry.len / mm::pg::BYTES_PER_PAGE as u64);
         let frames = frame_end - frame_start;
         if frames == 0 {
             continue;

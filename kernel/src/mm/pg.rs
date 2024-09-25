@@ -1,11 +1,21 @@
 use core::{marker, ops};
 
-pub const GRANULARITY: usize = 0x1000;
+pub const BYTES_PER_PAGE: usize = 4096;
+
+#[cfg(target_arch = "x86")]
+pub const PAGES_PER_TABLE: usize = 1024;
+#[cfg(target_arch = "x86")]
+pub const PAGES_TOTAL: usize = 0xFFFFF;
+
+#[cfg(target_arch = "x86_64")]
+pub const PAGES_PER_TABLE: usize = 512;
+#[cfg(target_arch = "x86_64")]
+pub const PAGES_TOTAL: usize = 0xFFFFFFFFF;
 
 #[cfg(target_arch = "x86")]
 pub const PAGE_TABLE: *mut PageTable<Level2> = 0xFFFFF000 as *mut _;
 #[cfg(target_arch = "x86_64")]
-pub const PAGE_TABLE: *mut PageTable<Level4> = 0o776_776_776_776_0000 as *mut _;
+pub const PAGE_TABLE: *mut PageTable<Level4> = 0o177_777_776_776_776_776_0000 as *mut _;
 
 #[repr(transparent)]
 #[derive(Clone, Copy)]
@@ -13,10 +23,7 @@ pub struct Page(pub usize);
 
 #[repr(C, align(4096))]
 pub struct PageTable<L: Level> {
-    #[cfg(target_arch = "x86")]
-    entries: [PageTableEntry; 1024],
-    #[cfg(target_arch = "x86_64")]
-    entries: [PageTableEntry; 512],
+    entries: [PageTableEntry; PAGES_PER_TABLE],
     level: marker::PhantomData<L>,
 }
 
@@ -63,9 +70,9 @@ where
 
         let addr = self as *mut _ as usize;
         #[cfg(target_arch = "x86")]
-        let next_addr = addr << 10 | (L::index(page) << 12);
+        let next_addr = addr << 10 | L::index(page) << 12;
         #[cfg(target_arch = "x86_64")]
-        let next_addr = addr << 9 | (L::index(page) << 12);
+        let next_addr = { (((addr << 9 | L::index(page) << 12) << 16) as i64 >> 16) as usize };
         Some(unsafe { &mut *(next_addr as *mut PageTable<L::NextLevel>) })
     }
 
@@ -85,12 +92,12 @@ where
 
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct PageTableEntry(u32);
+pub struct PageTableEntry(usize);
 
 impl PageTableEntry {
-    const FREE: u32 = 0;
-    const PRESENT: u32 = 1 << 0;
-    const WRITEABLE: u32 = 1 << 1;
+    const FREE: usize = 0;
+    const PRESENT: usize = 1 << 0;
+    const WRITEABLE: usize = 1 << 1;
 
     #[inline(always)]
     pub fn free(&self) -> bool {
@@ -99,7 +106,7 @@ impl PageTableEntry {
 
     #[inline(always)]
     pub fn map(&mut self, frame: usize) {
-        self.0 = (frame << 12) as u32 | Self::PRESENT | Self::WRITEABLE;
+        self.0 = Self::PRESENT | Self::WRITEABLE | frame << 12;
     }
 
     #[inline(always)]
@@ -124,31 +131,31 @@ pub enum Level4 {}
 impl Level for Level1 {
     fn index(page: Page) -> usize {
         if cfg!(target_arch = "x86") {
-            (page.0 >> (10 * 0)) & ((1 << 10) - 1)
+            page.0 >> 10 * 0 & (1 << 10) - 1
         } else {
-            (page.0 >> (9 * 0)) & ((1 << 9) - 1)
+            page.0 >> 9 * 0 & (1 << 9) - 1
         }
     }
 }
 impl Level for Level2 {
     fn index(page: Page) -> usize {
         if cfg!(target_arch = "x86") {
-            (page.0 >> (10 * 1)) & ((1 << 10) - 1)
+            page.0 >> 10 * 1 & (1 << 10) - 1
         } else {
-            (page.0 >> (9 * 1)) & ((1 << 9) - 1)
+            page.0 >> 9 * 1 & (1 << 9) - 1
         }
     }
 }
 #[cfg(target_arch = "x86_64")]
 impl Level for Level3 {
     fn index(page: Page) -> usize {
-        (page.0 >> (9 * 2)) & ((1 << 9) - 1)
+        page.0 >> 9 * 2 & (1 << 9) - 1
     }
 }
 #[cfg(target_arch = "x86_64")]
 impl Level for Level4 {
     fn index(page: Page) -> usize {
-        (page.0 >> (9 * 3)) & ((1 << 9) - 1)
+        page.0 >> 9 * 3 & (1 << 9) - 1
     }
 }
 

@@ -139,10 +139,9 @@ impl Masks {
         assert!(end <= length);
 
         let first_index = start / Block::BITS as usize;
-        let first_mask = Block::MAX << (start % Block::BITS as usize);
+        let first_mask = Block::MAX << start as u32 % Block::BITS;
         let last_index = end / Block::BITS as usize;
-        let last_mask =
-            (Block::MAX >> 1) >> (Block::BITS - (end % Block::BITS as usize) as u32 - 1);
+        let last_mask = (Block::MAX >> 1) >> Block::BITS - end as u32 % Block::BITS - 1;
 
         Self {
             first_index,

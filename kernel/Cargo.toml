@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+bitflags = "2.6.0"
+
 spin = "0.9"
 acpi = "5.0.0"
 
