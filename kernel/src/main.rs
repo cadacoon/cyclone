@@ -14,17 +14,16 @@
 
 #![no_std]
 #![no_main]
-#![feature(sync_unsafe_cell)]
+#![feature(abi_x86_interrupt, sync_unsafe_cell)]
 
-use core::{arch, cell, mem, ptr};
+use core::{arch, hint, slice};
 
-use alloc::slice;
-use tracing::{error, info};
-use tty::TtySubscriber;
+use tracing::error;
 
 #[macro_use]
 extern crate alloc;
 
+mod int;
 mod mm;
 mod sm;
 mod tty;
@@ -52,15 +51,17 @@ arch::global_asm!(include_str!("x86_64.S"));
 
 #[no_mangle]
 fn main(_multiboot_magic: u32, multiboot_info: u32) -> ! {
-    init_virt_mem();
+    mm::sm::init_tss();
+    int::init();
 
     let multiboot_info = unsafe {
         &*((multiboot_info as usize + (&KERNEL_VMA as *const u8 as usize))
             as *const multiboot::multiboot_info)
     };
 
-    init_phys_mem_bare();
-    init_phys_mem_e820(unsafe {
+    mm::init_virt_mem();
+    mm::init_phys_mem_bare();
+    mm::init_phys_mem_e820(unsafe {
         slice::from_raw_parts(
             (multiboot_info.mmap_addr as usize + (&KERNEL_VMA as *const u8 as usize))
                 as *const multiboot::multiboot_mmap_entry,
@@ -68,73 +69,19 @@ fn main(_multiboot_magic: u32, multiboot_info: u32) -> ! {
         )
     });
 
-    init_logging();
+    tty::init_logging();
 
-    panic!("System halted. It is safe to turn off your machine now.")
+    panic!("It is now safe to turn off your machine")
 }
 
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
     error!("{}", info.message());
-    loop {}
-}
 
-fn init_virt_mem() {
-    (unsafe { &mut *(mm::pg::PAGE_TABLE) })[mm::pg::Page(0)].unmap();
-}
-
-fn init_phys_mem_bare() {
-    static PHYS_MEM: cell::SyncUnsafeCell<[usize; 2048 / usize::BITS as usize]> =
-        cell::SyncUnsafeCell::new([0; 2048 / usize::BITS as usize]);
-
-    let mut phys_mem = mm::PHYS_MEM.lock();
-    *phys_mem = mm::PhysicalMemory::new(
-        util::bitmap::Bitmap::new(unsafe {
-            mem::transmute(ptr::slice_from_raw_parts(
-                PHYS_MEM.get(),
-                2048 / usize::BITS as usize,
-            ))
-        }),
-        2048,
-    );
-    phys_mem.mark_used(0, 1024); // system & kernel
-}
-
-fn init_phys_mem_e820(phys_mem_map: &[multiboot::multiboot_mmap_entry]) {
-    let phys_mem_max: usize = phys_mem_map
-        .iter()
-        .filter(|phys_mem_entry| phys_mem_entry.type_ == multiboot::MULTIBOOT_MEMORY_AVAILABLE)
-        .map(|phys_mem_entry| {
-            ((phys_mem_entry.addr + phys_mem_entry.len) / mm::pg::BYTES_PER_PAGE as u64) as usize
-        })
-        .max()
-        .unwrap();
-    let phys_mem_new = mm::PhysicalMemory::new(
-        util::bitmap::Bitmap::new(
-            vec![usize::MAX; phys_mem_max.div_ceil(usize::BITS as usize)].into_boxed_slice(),
-        ),
-        0,
-    );
-
-    let mut phys_mem = mm::PHYS_MEM.lock();
-    *phys_mem = phys_mem_new;
-    for phys_mem_entry in phys_mem_map {
-        if phys_mem_entry.type_ != multiboot::MULTIBOOT_MEMORY_AVAILABLE {
-            continue;
-        }
-
-        let frame_start = phys_mem_entry.addr / mm::pg::BYTES_PER_PAGE as u64;
-        let frame_end = frame_start + (phys_mem_entry.len / mm::pg::BYTES_PER_PAGE as u64);
-        let frames = frame_end - frame_start;
-        if frames == 0 {
-            continue;
-        }
-
-        phys_mem.mark_free(frame_start as usize, frames as usize);
+    unsafe {
+        core::arch::asm!("int3");
     }
-    phys_mem.mark_used(0, 1024); // system & kernel
-}
-
-fn init_logging() {
-    let _ = tracing::subscriber::set_global_default(TtySubscriber::default());
+    loop {
+        hint::spin_loop();
+    }
 }

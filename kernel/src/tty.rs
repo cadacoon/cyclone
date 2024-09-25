@@ -55,7 +55,7 @@ impl Write for Tty {
     }
 }
 
-pub struct TtySubscriber(Mutex<Tty>);
+struct TtySubscriber(Mutex<Tty>);
 
 impl Default for TtySubscriber {
     fn default() -> Self {
@@ -83,7 +83,7 @@ impl tracing::Subscriber for TtySubscriber {
     fn record_follows_from(&self, _span: &tracing::span::Id, _follows: &tracing::span::Id) {}
 
     fn event(&self, event: &tracing::Event<'_>) {
-        event.record(&mut TtySubscriberVisitor(&mut self.0.lock()));
+        event.record(&mut TtyFieldVisitor(&mut self.0.lock()));
     }
 
     fn enter(&self, _span: &tracing::span::Id) {}
@@ -91,10 +91,14 @@ impl tracing::Subscriber for TtySubscriber {
     fn exit(&self, _span: &tracing::span::Id) {}
 }
 
-pub struct TtySubscriberVisitor<'tty>(&'tty mut Tty);
+struct TtyFieldVisitor<'tty>(&'tty mut Tty);
 
-impl<'tty> tracing::field::Visit for TtySubscriberVisitor<'tty> {
+impl<'tty> tracing::field::Visit for TtyFieldVisitor<'tty> {
     fn record_debug(&mut self, _field: &tracing::field::Field, value: &dyn fmt::Debug) {
         let _ = writeln!(self.0, "{:#?}", value);
     }
+}
+
+pub(super) fn init_logging() {
+    let _ = tracing::subscriber::set_global_default(TtySubscriber::default());
 }
