@@ -26,14 +26,14 @@ __start:
     mov esi, ebx
 
     // Enable long mode
-    mov   ecx, 0xC0000080 // EFER MSR
+    mov   ecx, 0xC0000080 // EFER
     rdmsr
-    or    eax, 0x00000100 // LME
+    or    eax, 0x00000100 // EFER.LME
     wrmsr
 
     // Enable PAE
     mov eax, cr4
-    or  eax, 0x00000020 // PAE
+    or  eax, 0x00000020 // CR4.PAE
     mov cr4, eax
 
     // Fill page table 1
@@ -67,7 +67,7 @@ __start:
 
     // Enable paging
     mov eax, cr0
-    or  eax, 0x80010000 // PG WP
+    or  eax, 0x80000000 // CR0.PG
     mov cr0, eax
 
     // Load GDT

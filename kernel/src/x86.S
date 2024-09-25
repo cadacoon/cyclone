@@ -44,7 +44,7 @@ __start:
 
     // Enable paging
     mov eax, cr0
-    or  eax, 0x80010000 // PG WP
+    or  eax, 0x80000000 // CR0.PG
     mov cr0, eax
 
     // Load GDT

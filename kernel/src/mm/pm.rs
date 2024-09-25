@@ -16,10 +16,10 @@ use core::{mem, ptr};
 
 use spin::Mutex;
 
-use crate::util;
+use crate::util::bitmap::Bitmap;
 
 pub static PHYS_MEM: Mutex<PhysicalMemory> = Mutex::new(PhysicalMemory::new(
-    util::bitmap::Bitmap::new(unsafe {
+    Bitmap::new(unsafe {
         mem::transmute(ptr::slice_from_raw_parts(
             ptr::NonNull::<[usize; 0]>::dangling().as_ptr() as *const _,
             0,
@@ -29,12 +29,12 @@ pub static PHYS_MEM: Mutex<PhysicalMemory> = Mutex::new(PhysicalMemory::new(
 ));
 
 pub struct PhysicalMemory {
-    used: mem::ManuallyDrop<util::bitmap::Bitmap>,
+    used: mem::ManuallyDrop<Bitmap>,
     free: usize,
 }
 
 impl PhysicalMemory {
-    pub const fn new(used: util::bitmap::Bitmap, free: usize) -> Self {
+    pub const fn new(used: Bitmap, free: usize) -> Self {
         Self {
             used: mem::ManuallyDrop::new(used),
             free,

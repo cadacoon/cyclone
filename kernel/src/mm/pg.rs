@@ -6,14 +6,13 @@ pub const BYTES_PER_PAGE: usize = 4096;
 pub const PAGES_PER_TABLE: usize = 1024;
 #[cfg(target_arch = "x86")]
 pub const PAGES_TOTAL: usize = 0xFFFFF;
+#[cfg(target_arch = "x86")]
+pub const PAGE_TABLE: *mut PageTable<Level2> = 0xFFFFF000 as *mut _;
 
 #[cfg(target_arch = "x86_64")]
 pub const PAGES_PER_TABLE: usize = 512;
 #[cfg(target_arch = "x86_64")]
 pub const PAGES_TOTAL: usize = 0xFFFFFFFFF;
-
-#[cfg(target_arch = "x86")]
-pub const PAGE_TABLE: *mut PageTable<Level2> = 0xFFFFF000 as *mut _;
 #[cfg(target_arch = "x86_64")]
 pub const PAGE_TABLE: *mut PageTable<Level4> = 0o177_777_776_776_776_776_0000 as *mut _;
 
@@ -21,21 +20,16 @@ pub const PAGE_TABLE: *mut PageTable<Level4> = 0o177_777_776_776_776_776_0000 as
 #[derive(Clone, Copy)]
 pub struct Page(pub usize);
 
+impl Page {
+    pub const fn addr(&self) -> *mut u8 {
+        (self.0 * size_of::<PageTable<Level1>>()) as *mut u8
+    }
+}
+
 #[repr(C, align(4096))]
 pub struct PageTable<L: Level> {
     entries: [PageTableEntry; PAGES_PER_TABLE],
     level: marker::PhantomData<L>,
-}
-
-impl<L> PageTable<L>
-where
-    L: Level,
-{
-    fn init(&mut self) {
-        for entry in &mut self.entries {
-            entry.unmap();
-        }
-    }
 }
 
 impl<L> ops::Index<Page> for PageTable<L>
@@ -64,7 +58,7 @@ where
 {
     pub fn table(&mut self, page: Page) -> Option<&mut PageTable<L::NextLevel>> {
         let entry = self.entries[L::index(page)];
-        if entry.free() {
+        if !entry.used() {
             return None;
         }
 
@@ -83,7 +77,10 @@ where
             phys_mem.mark_used(frame, 1);
 
             self.entries[L::index(page)].map(frame);
-            unsafe { self.table(page).unwrap_unchecked() }.init();
+            let table = unsafe { self.table(page).unwrap_unchecked() };
+            for entry in &mut table.entries {
+                entry.unmap();
+            }
         }
 
         unsafe { self.table(page).unwrap_unchecked() }
@@ -100,8 +97,8 @@ impl PageTableEntry {
     const WRITEABLE: usize = 1 << 1;
 
     #[inline(always)]
-    pub fn free(&self) -> bool {
-        self.0 == Self::FREE
+    pub fn used(&self) -> bool {
+        self.0 != Self::FREE
     }
 
     #[inline(always)]

@@ -19,12 +19,15 @@
 use core::{arch, cell, mem, ptr};
 
 use alloc::slice;
+use tracing::{error, info};
+use tty::TtySubscriber;
 
 #[macro_use]
 extern crate alloc;
 
 mod mm;
 mod sm;
+mod tty;
 mod util;
 
 #[allow(
@@ -49,6 +52,8 @@ arch::global_asm!(include_str!("x86_64.S"));
 
 #[no_mangle]
 fn main(_multiboot_magic: u32, multiboot_info: u32) -> ! {
+    init_virt_mem();
+
     let multiboot_info = unsafe {
         &*((multiboot_info as usize + (&KERNEL_VMA as *const u8 as usize))
             as *const multiboot::multiboot_info)
@@ -63,12 +68,19 @@ fn main(_multiboot_magic: u32, multiboot_info: u32) -> ! {
         )
     });
 
-    unreachable!()
+    init_logging();
+
+    panic!("System halted. It is safe to turn off your machine now.")
 }
 
 #[panic_handler]
-fn panic(_info: &core::panic::PanicInfo) -> ! {
+fn panic(info: &core::panic::PanicInfo) -> ! {
+    error!("{}", info.message());
     loop {}
+}
+
+fn init_virt_mem() {
+    (unsafe { &mut *(mm::pg::PAGE_TABLE) })[mm::pg::Page(0)].unmap();
 }
 
 fn init_phys_mem_bare() {
@@ -121,4 +133,8 @@ fn init_phys_mem_e820(phys_mem_map: &[multiboot::multiboot_mmap_entry]) {
         phys_mem.mark_free(frame_start as usize, frames as usize);
     }
     phys_mem.mark_used(0, 1024); // system & kernel
+}
+
+fn init_logging() {
+    let _ = tracing::subscriber::set_global_default(TtySubscriber::default());
 }
