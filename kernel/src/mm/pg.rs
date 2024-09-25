@@ -108,7 +108,7 @@ impl PageTableEntry {
 
     #[inline(always)]
     pub fn unmap(&mut self) -> usize {
-        let frame = (self.0 >> 12) as usize;
+        let frame = self.0 >> 12;
         self.0 = Self::FREE;
         frame
     }
@@ -128,31 +128,31 @@ pub enum Level4 {}
 impl Level for Level1 {
     fn index(page: Page) -> usize {
         if cfg!(target_arch = "x86") {
-            page.0 >> 10 * 0 & (1 << 10) - 1
+            page.0 >> (10 * 0) & ((1 << 10) - 1)
         } else {
-            page.0 >> 9 * 0 & (1 << 9) - 1
+            page.0 >> (9 * 0) & (1 << 9) - 1
         }
     }
 }
 impl Level for Level2 {
     fn index(page: Page) -> usize {
         if cfg!(target_arch = "x86") {
-            page.0 >> 10 * 1 & (1 << 10) - 1
+            page.0 >> (10 * 1) & ((1 << 10) - 1)
         } else {
-            page.0 >> 9 * 1 & (1 << 9) - 1
+            page.0 >> (9 * 1) & ((1 << 9) - 1)
         }
     }
 }
 #[cfg(target_arch = "x86_64")]
 impl Level for Level3 {
     fn index(page: Page) -> usize {
-        page.0 >> 9 * 2 & (1 << 9) - 1
+        page.0 >> (9 * 2) & ((1 << 9) - 1)
     }
 }
 #[cfg(target_arch = "x86_64")]
 impl Level for Level4 {
     fn index(page: Page) -> usize {
-        page.0 >> 9 * 3 & (1 << 9) - 1
+        page.0 >> (9 * 3) & ((1 << 9) - 1)
     }
 }
 

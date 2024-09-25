@@ -14,12 +14,12 @@
 
 use core::{arch, mem, ptr};
 
-const DESCRIPTOR_NULL: usize = 0;
-const DESCRIPTOR_KCODE: usize = 1;
-const DESCRIPTOR_KDATA: usize = 2;
-const DESCRIPTOR_UCODE: usize = 3;
-const DESCRIPTOR_UDATA: usize = 4;
-const DESCRIPTOR_TSS: usize = 5;
+pub(crate) const DESCRIPTOR_NULL: u16 = 0;
+pub(crate) const DESCRIPTOR_KCODE: u16 = 1;
+pub(crate) const DESCRIPTOR_KDATA: u16 = 2;
+pub(crate) const DESCRIPTOR_UCODE: u16 = 3;
+pub(crate) const DESCRIPTOR_UDATA: u16 = 4;
+pub(crate) const DESCRIPTOR_TSS: u16 = 5;
 
 #[cfg(target_arch = "x86")]
 const DESCRIPTORS: usize = 6;
@@ -89,6 +89,12 @@ static mut DESCRIPTOR_TABLE: [Descriptor; DESCRIPTORS] = [
 ];
 #[used]
 static TASK_STATE_SEGMENT: TaskStateSegment = TaskStateSegment::zeroed();
+
+#[repr(C, packed(2))]
+struct DescriptorTableRegister {
+    size: u16,
+    offset: usize,
+}
 
 #[repr(C)]
 struct Descriptor {
@@ -202,11 +208,24 @@ impl TaskStateSegment {
     }
 }
 
-pub(crate) fn init_tss() {
+pub(crate) fn init() {
+    // Correct the GDT address
+    #[cfg(target_arch = "x86_64")]
+    unsafe {
+        let gdtr = DescriptorTableRegister {
+            size: (mem::size_of_val(&DESCRIPTOR_TABLE) - 1) as u16,
+            offset: (ptr::addr_of!(DESCRIPTOR_TABLE)) as usize,
+        };
+        arch::asm!(
+            "lgdt [{}]", in(reg) &gdtr, options(readonly, nostack, preserves_flags)
+        )
+    }
+
+    // Setup the TSS
     let addr = (ptr::addr_of!(TASK_STATE_SEGMENT)) as usize;
     let size = mem::size_of::<TaskStateSegment>() - 1;
     unsafe {
-        DESCRIPTOR_TABLE[DESCRIPTOR_TSS] = Descriptor::new(
+        DESCRIPTOR_TABLE[DESCRIPTOR_TSS as usize] = Descriptor::new(
             addr as u32,
             size as u32,
             DescriptorAccess::A
@@ -218,8 +237,12 @@ pub(crate) fn init_tss() {
     }
     #[cfg(target_arch = "x86_64")]
     unsafe {
-        DESCRIPTOR_TABLE[DESCRIPTOR_TSS + 1].limit_0_15 = (addr >> 32) as u16;
-        DESCRIPTOR_TABLE[DESCRIPTOR_TSS + 1].base_0_15 = (addr >> 48) as u16;
+        DESCRIPTOR_TABLE[DESCRIPTOR_TSS as usize + 1].limit_0_15 = (addr >> 32) as u16;
+        DESCRIPTOR_TABLE[DESCRIPTOR_TSS as usize + 1].base_0_15 = (addr >> 48) as u16;
     }
-    unsafe { arch::asm!("ltr {0:x}", in(reg) (DESCRIPTOR_TSS << 3) as u32) }
+
+    // Update the TSS
+    unsafe {
+        arch::asm!("ltr {0:x}", in(reg) (DESCRIPTOR_TSS << 3) as u32, options(nostack, preserves_flags))
+    }
 }

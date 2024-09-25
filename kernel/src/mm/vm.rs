@@ -133,7 +133,7 @@ unsafe impl alloc::GlobalAlloc for VirtualMemory {
     unsafe fn alloc(&self, layout: alloc::Layout) -> *mut u8 {
         let pages = layout.size().div_ceil(BYTES_PER_PAGE);
         self.allocate(pages)
-            .map_or(ptr::null_mut(), |page_start| page_start.addr() as *mut u8)
+            .map_or(ptr::null_mut(), |page_start| page_start.addr())
     }
 
     unsafe fn dealloc(&self, virt_addr: *mut u8, layout: alloc::Layout) {

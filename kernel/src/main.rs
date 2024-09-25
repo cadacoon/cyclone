@@ -18,7 +18,7 @@
 
 use core::{arch, hint, slice};
 
-use tracing::error;
+use tracing::{error, info};
 
 #[macro_use]
 extern crate alloc;
@@ -51,7 +51,7 @@ arch::global_asm!(include_str!("x86_64.S"));
 
 #[no_mangle]
 fn main(_multiboot_magic: u32, multiboot_info: u32) -> ! {
-    mm::sm::init_tss();
+    mm::sm::init();
     int::init();
 
     let multiboot_info = unsafe {
@@ -71,6 +71,8 @@ fn main(_multiboot_magic: u32, multiboot_info: u32) -> ! {
 
     tty::init_logging();
 
+    info!("Meerkat Operating System {}", env!("CARGO_PKG_VERSION"));
+
     panic!("It is now safe to turn off your machine")
 }
 
@@ -78,9 +80,6 @@ fn main(_multiboot_magic: u32, multiboot_info: u32) -> ! {
 fn panic(info: &core::panic::PanicInfo) -> ! {
     error!("{}", info.message());
 
-    unsafe {
-        core::arch::asm!("int3");
-    }
     loop {
         hint::spin_loop();
     }
