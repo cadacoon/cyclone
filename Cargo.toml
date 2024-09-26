@@ -1,6 +1,13 @@
 [workspace]
 resolver = "2"
-members = ["kernel"]
+members = [
+    "kernel",
+    "srv/vfs",
+    "srv/fs/fat",
+    "srv/fs/tmpfs",
+    "drv/pci",
+    "drv/pci/ide",
+]
 
 [profile.dev]
 opt-level = 1

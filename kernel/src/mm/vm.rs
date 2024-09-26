@@ -142,25 +142,3 @@ unsafe impl alloc::GlobalAlloc for VirtualMemory {
         self.free(page_start, pages);
     }
 }
-
-impl acpi::AcpiHandler for VirtualMemory {
-    unsafe fn map_physical_region<T>(
-        &self,
-        phys_addr: usize,
-        size: usize,
-    ) -> acpi::PhysicalMapping<Self, T> {
-        let frame_start = phys_addr / BYTES_PER_PAGE;
-        let frames = size.div_ceil(BYTES_PER_PAGE);
-        let offset = phys_addr % BYTES_PER_PAGE;
-        let virt_addr = self.map(frame_start, frames).unwrap().addr().add(offset);
-        acpi::PhysicalMapping::new(
-            phys_addr,
-            ptr::NonNull::new_unchecked(virt_addr as *mut T),
-            size,
-            size,
-            Self,
-        )
-    }
-
-    fn unmap_physical_region<T>(_region: &acpi::PhysicalMapping<Self, T>) {}
-}

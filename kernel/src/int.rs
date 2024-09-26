@@ -14,8 +14,6 @@
 
 use core::{arch, mem, ptr};
 
-use tracing::warn;
-
 use crate::mm;
 
 static mut DESCRIPTOR_TABLE: [Descriptor; 32] = [Descriptor::zeroed(); 32];

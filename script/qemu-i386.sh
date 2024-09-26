@@ -1,8 +1,8 @@
 #!/bin/sh
 
-cargo build -p meerkat_kernel --target i386-unknown-meerkat.json
+cargo build -p krnl --target i386-unknown-meerkat.json
 
-kernel=target/i386-unknown-meerkat/debug/meerkat_kernel
+kernel=target/i386-unknown-meerkat/debug/krnl
 objcopy -O binary $kernel $kernel.bin
 qemu-system-i386 \
     -m 8G \

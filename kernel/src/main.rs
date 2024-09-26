@@ -16,7 +16,7 @@
 #![no_main]
 #![feature(abi_x86_interrupt, sync_unsafe_cell)]
 
-use core::{arch, hint, slice};
+use core::{arch, hint, panic, slice};
 
 use tracing::{error, info};
 
@@ -50,14 +50,20 @@ arch::global_asm!(include_str!("x86.S"));
 arch::global_asm!(include_str!("x86_64.S"));
 
 #[no_mangle]
-fn main(_multiboot_magic: u32, multiboot_info: u32) -> ! {
+fn main(multiboot_magic: u32, multiboot_info: u32) -> ! {
     mm::sm::init();
     int::init();
 
+    if multiboot_magic != multiboot::MULTIBOOT_BOOTLOADER_MAGIC {
+        halt();
+    }
     let multiboot_info = unsafe {
         &*((multiboot_info as usize + (&KERNEL_VMA as *const u8 as usize))
             as *const multiboot::multiboot_info)
     };
+    if multiboot_info.flags & multiboot::MULTIBOOT_INFO_MEM_MAP == 0 {
+        halt();
+    }
 
     mm::init_virt_mem();
     mm::init_phys_mem_bare();
@@ -73,13 +79,26 @@ fn main(_multiboot_magic: u32, multiboot_info: u32) -> ! {
 
     info!("Meerkat Operating System {}", env!("CARGO_PKG_VERSION"));
 
+    unsafe {
+        let mods = slice::from_raw_parts(
+            (multiboot_info.mods_addr as usize + (&KERNEL_VMA as *const u8 as usize))
+                as *const multiboot::multiboot_mod_list,
+            multiboot_info.mods_count as usize,
+        );
+        info!("{:?}", mods);
+    }
     panic!("It is now safe to turn off your machine")
 }
 
 #[panic_handler]
-fn panic(info: &core::panic::PanicInfo) -> ! {
+fn panic(info: &panic::PanicInfo) -> ! {
     error!("{}", info.message());
 
+    halt();
+}
+
+#[inline(always)]
+fn halt() -> ! {
     loop {
         hint::spin_loop();
     }

@@ -3,16 +3,6 @@
 version = 3
 
 [[package]]
-name = "acpi"
-version = "5.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e248409195304021f61b39ba2628f62a45a3abf6119669d44b3399d60eabe4c3"
-dependencies = [
- "bit_field",
- "log",
-]
-
-[[package]]
 name = "aho-corasick"
 version = "1.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -48,12 +38,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bit_field"
-version = "0.10.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dc827186963e592360843fb5ba4b973e145841266c1357f7180c43526f2e5b61"
-
-[[package]]
 name = "bitflags"
 version = "2.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -86,6 +70,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "drv_pci"
+version = "0.1.0"
+
+[[package]]
+name = "drv_pci_ide"
+version = "0.1.0"
+
+[[package]]
 name = "either"
 version = "1.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -104,6 +96,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "413ee7dfc52ee1a4949ceeb7dbc8a33f2d6c088194d9f922fb8318faf1f01186"
 dependencies = [
  "either",
+]
+
+[[package]]
+name = "krnl"
+version = "0.1.0"
+dependencies = [
+ "bindgen",
+ "bitflags",
+ "spin",
+ "tracing",
 ]
 
 [[package]]
@@ -137,17 +139,6 @@ name = "log"
 version = "0.4.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a7a70ba024b9dc04c27ea2f0c0548feb474ec5c54bba33a7f72f873a39d07b24"
-
-[[package]]
-name = "meerkat_kernel"
-version = "0.1.0"
-dependencies = [
- "acpi",
- "bindgen",
- "bitflags",
- "spin",
- "tracing",
-]
 
 [[package]]
 name = "memchr"
@@ -260,6 +251,18 @@ checksum = "6980e8d7511241f8acf4aebddbb1ff938df5eebe98691418c4468d0b72a96a67"
 dependencies = [
  "lock_api",
 ]
+
+[[package]]
+name = "srv_fs_fat"
+version = "0.1.0"
+
+[[package]]
+name = "srv_fs_tmpfs"
+version = "0.1.0"
+
+[[package]]
+name = "srv_vfs"
+version = "0.1.0"
 
 [[package]]
 name = "syn"
