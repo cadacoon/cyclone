@@ -14,7 +14,7 @@
 
 #![no_std]
 #![no_main]
-#![feature(abi_x86_interrupt, sync_unsafe_cell)]
+#![feature(abi_x86_interrupt, sync_unsafe_cell, negative_impls)]
 
 use core::{arch, hint, panic, slice};
 
@@ -79,15 +79,9 @@ fn main(multiboot_magic: u32, multiboot_info: u32) -> ! {
 
     info!("Meerkat Operating System {}", env!("CARGO_PKG_VERSION"));
 
-    unsafe {
-        let mods = slice::from_raw_parts(
-            (multiboot_info.mods_addr as usize + (&KERNEL_VMA as *const u8 as usize))
-                as *const multiboot::multiboot_mod_list,
-            multiboot_info.mods_count as usize,
-        );
-        info!("{:?}", mods);
-    }
-    panic!("It is now safe to turn off your machine")
+    sm::run();
+
+    panic!("It is now safe to turn off your machine.");
 }
 
 #[panic_handler]

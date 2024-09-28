@@ -14,9 +14,7 @@
 
 use core::{arch, mem, ptr};
 
-use crate::mm;
-
-static mut DESCRIPTOR_TABLE: [Descriptor; 32] = [Descriptor::zeroed(); 32];
+static mut DESCRIPTOR_TABLE: [Descriptor; 256] = [Descriptor::zeroed(); 256];
 
 #[repr(C, packed(2))]
 struct DescriptorTableRegister {
@@ -93,17 +91,9 @@ const HV: usize = 0x1C; // Hypervisor Injection Exception
 const VC: usize = 0x1D; // VMM Communication Exception
 const SX: usize = 0x1E; // Security Exception
 
-pub(crate) fn init() {
+pub fn init() {
     // Setup the IDT
-    unsafe {
-        DESCRIPTOR_TABLE[DB] = Descriptor::new(
-            double_fault as usize,
-            mm::sm::DESCRIPTOR_KCODE << 3,
-            DescriptorGateType::Interrupt,
-            0,
-            0,
-        )
-    };
+    unsafe {}
 
     // Update the IDT
     unsafe {
@@ -128,5 +118,3 @@ struct StackFrame {
     #[cfg(target_arch = "x86_64")]
     ss: u16,
 }
-
-extern "x86-interrupt" fn double_fault(_stack_frame: StackFrame) {}

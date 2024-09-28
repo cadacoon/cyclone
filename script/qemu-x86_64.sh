@@ -8,4 +8,7 @@ qemu-system-x86_64 \
     -m 8G \
     -kernel $kernel.bin \
     -no-reboot -no-shutdown -s -d in_asm,int \
-#    -accel kvm -smp 4 \
+    -drive file=target/qemu.img,format=raw \
+    -device virtio-net,netdev=vmnic -netdev user,id=vmnic \
+    -machine pcspk-audiodev=speaker -audiodev pa,id=speaker \
+    -accel kvm -smp 4

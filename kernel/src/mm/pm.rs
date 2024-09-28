@@ -16,7 +16,7 @@ use core::{mem, ptr};
 
 use spin::Mutex;
 
-use crate::util::bitmap::Bitmap;
+use crate::util::Bitmap;
 
 pub static PHYS_MEM: Mutex<PhysicalMemory> = Mutex::new(PhysicalMemory::new(
     Bitmap::new(unsafe {
@@ -41,23 +41,23 @@ impl PhysicalMemory {
         }
     }
 
-    pub fn mark_used(&mut self, frame_start: usize, frames: usize) {
-        self.used.set_ones(frame_start..frame_start + frames);
-        self.free -= frames; // TODO: count 0's
+    pub fn mark_used(&mut self, frame_start: usize, count: usize) {
+        self.used.set_ones(frame_start..frame_start + count);
+        self.free -= count; // TODO: count 0's
     }
 
-    pub fn mark_free(&mut self, frame_start: usize, frames: usize) {
-        self.used.set_zeros(frame_start..frame_start + frames);
-        self.free += frames; // TODO: count 1's
+    pub fn mark_free(&mut self, frame_start: usize, count: usize) {
+        self.used.set_zeros(frame_start..frame_start + count);
+        self.free += count; // TODO: count 1's
     }
 
-    pub fn find_free(&mut self, frames: usize) -> Option<usize> {
-        if self.free < frames {
+    pub fn find_free(&mut self, count: usize) -> Option<usize> {
+        if self.free < count {
             return None;
         }
 
         self.used
-            .consecutive_zeros(frames)
+            .consecutive_zeros(count)
             .next()
             .map(|frame_range| frame_range.start)
     }

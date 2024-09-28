@@ -22,15 +22,14 @@ use super::{
 #[global_allocator]
 pub static VIRT_MEM: VirtualMemory = VirtualMemory;
 
-#[derive(Clone)]
 pub struct VirtualMemory;
 
 impl VirtualMemory {
     /// Maps frames to free pages
-    pub fn map(&self, frame_start: usize, frames: usize) -> Option<Page> {
-        let page_start = self.find_free(frames)?;
+    pub fn map(&self, page_start: Page, frame_start: usize, count: usize) -> Option<Page> {
+        let page_start = self.find_free(page_start, count)?;
         for (page, frame) in
-            (page_start.0..page_start.0 + frames).zip(frame_start..frame_start + frames)
+            (page_start.0..page_start.0 + count).zip(frame_start..frame_start + count)
         {
             let page = Page(page);
             let page_table = unsafe { &mut *PAGE_TABLE };
@@ -51,28 +50,28 @@ impl VirtualMemory {
     }
 
     /// Allocates free frames and maps them to free pages
-    pub fn allocate(&self, pages: usize) -> Option<Page> {
-        self.allocate_contiguous(pages)
+    pub fn allocate(&self, page_start: Page, count: usize) -> Option<Page> {
+        self.allocate_contiguous(page_start, count)
             .map(|(page_start, _)| page_start)
     }
 
     /// Allocates free frames and maps them to free pages
-    pub fn allocate_contiguous(&self, pages: usize) -> Option<(Page, usize)> {
+    pub fn allocate_contiguous(&self, page_start: Page, count: usize) -> Option<(Page, usize)> {
         let frame_start;
         {
             let mut phys_mem = PHYS_MEM.lock();
-            frame_start = phys_mem.find_free(pages)?;
-            phys_mem.mark_used(frame_start, pages);
+            frame_start = phys_mem.find_free(count)?;
+            phys_mem.mark_used(frame_start, count);
         }
-        let page_start = self.map(frame_start, pages)?;
+        let page_start = self.map(page_start, frame_start, count)?;
 
         Some((page_start, frame_start))
     }
 
     /// Frees pages and frames
-    pub fn free(&self, page_start: Page, pages: usize) {
+    pub fn free(&self, page_start: Page, count: usize) {
         let mut phys_mem = PHYS_MEM.lock();
-        for page in page_start.0..page_start.0 + pages {
+        for page in page_start.0..page_start.0 + count {
             let page = Page(page);
             let page_table = unsafe { &mut *PAGE_TABLE };
             #[cfg(target_arch = "x86_64")]
@@ -91,12 +90,12 @@ impl VirtualMemory {
     }
 
     /// Finds free pages
-    fn find_free(&self, pages: usize) -> Option<Page> {
-        let mut page_start = 1;
+    fn find_free(&self, page_start: Page, count: usize) -> Option<Page> {
+        let mut page_start = page_start.0;
         let mut consecutive_pages = 0;
-        while consecutive_pages < pages {
+        while consecutive_pages < count {
             // not enough remaining pages
-            if page_start + pages > PAGES_TOTAL {
+            if page_start + count > PAGES_TOTAL {
                 return None;
             }
 
@@ -132,7 +131,7 @@ impl VirtualMemory {
 unsafe impl alloc::GlobalAlloc for VirtualMemory {
     unsafe fn alloc(&self, layout: alloc::Layout) -> *mut u8 {
         let pages = layout.size().div_ceil(BYTES_PER_PAGE);
-        self.allocate(pages)
+        self.allocate(Page(1), pages)
             .map_or(ptr::null_mut(), |page_start| page_start.addr())
     }
 
@@ -140,5 +139,15 @@ unsafe impl alloc::GlobalAlloc for VirtualMemory {
         let page_start = Page(virt_addr as usize / BYTES_PER_PAGE);
         let pages = layout.size().div_ceil(BYTES_PER_PAGE);
         self.free(page_start, pages);
+    }
+}
+
+impl Clone for VirtualMemory {
+    fn clone(&self) -> Self {}
+}
+
+impl Drop for VirtualMemory {
+    fn drop(&mut self) {
+        todo!()
     }
 }

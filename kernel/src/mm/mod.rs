@@ -23,7 +23,7 @@ pub use vm::*;
 
 use core::{cell, mem, ptr};
 
-use crate::{multiboot, util::bitmap::Bitmap};
+use crate::{multiboot, util::Bitmap};
 
 pub(crate) fn init_virt_mem() {
     (unsafe { &mut *(pg::PAGE_TABLE) })[pg::Page(0)].unmap(); // identity

@@ -50,20 +50,20 @@ __start:
     // Load GDT
     lgdt gdtr
 
+    // Reload DS
+    mov ax, (2 << 3) // Ktext
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+    mov ss, ax
+
     // Reload CS
-    //jmp 8, main
+    //jmp (1 << 3), main
     .byte 0xEA
     .long 2f
-    .short 0x0008
+    .short (1 << 3) // Kcode
 2:
-    // Reload DS
-    mov eax, 16
-    mov ds, eax
-    mov es, eax
-    mov fs, eax
-    mov gs, eax
-    mov ss, eax
-
     // Call main with multiboot parameters
     mov eax, offset stack_top
     sub eax, 16
