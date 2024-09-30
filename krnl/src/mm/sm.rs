@@ -14,12 +14,12 @@
 
 use core::{arch, mem, ptr};
 
-pub(crate) const DESCRIPTOR_NULL: u16 = 0;
-pub(crate) const DESCRIPTOR_KCODE: u16 = 1;
-pub(crate) const DESCRIPTOR_KDATA: u16 = 2;
-pub(crate) const DESCRIPTOR_UCODE: u16 = 3;
-pub(crate) const DESCRIPTOR_UDATA: u16 = 4;
-pub(crate) const DESCRIPTOR_TSS: u16 = 5;
+const DESCRIPTOR_NULL: u16 = 0;
+const DESCRIPTOR_KCODE: u16 = 1;
+const DESCRIPTOR_KDATA: u16 = 2;
+const DESCRIPTOR_UCODE: u16 = 3;
+const DESCRIPTOR_UDATA: u16 = 4;
+const DESCRIPTOR_TSS: u16 = 5;
 
 #[cfg(target_arch = "x86")]
 const DESCRIPTORS: usize = 6;
@@ -87,8 +87,6 @@ static mut DESCRIPTOR_TABLE: [Descriptor; DESCRIPTORS] = [
     #[cfg(target_arch = "x86_64")]
     Descriptor::zeroed(),
 ];
-#[used]
-static TASK_STATE_SEGMENT: TaskStateSegment = TaskStateSegment::zeroed();
 
 #[repr(C, packed(2))]
 struct DescriptorTableRegister {
@@ -146,6 +144,9 @@ bitflags::bitflags! {
         const G = 1 << 7;
     }
 }
+
+#[used]
+static TASK_STATE_SEGMENT: TaskStateSegment = TaskStateSegment::zeroed();
 
 #[cfg(target_arch = "x86")]
 #[repr(C)]
@@ -208,7 +209,7 @@ impl TaskStateSegment {
     }
 }
 
-pub(crate) fn init() {
+pub fn init() {
     // Correct the GDT address
     #[cfg(target_arch = "x86_64")]
     unsafe {

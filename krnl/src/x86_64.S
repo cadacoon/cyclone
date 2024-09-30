@@ -14,11 +14,54 @@
 
     .extern main
 
-    .code32
-    .align 8
-
     .section .multiboot.init, "a"
 
+    .code16
+__start_ap:
+    // Enable long mode
+    mov   ecx, 0xC0000080 // EFER
+    rdmsr
+    or    eax, 0x00000100 // EFER.LME
+    wrmsr
+
+    // Enable PAE
+    mov eax, cr4
+    or  eax, 0x00000020 // CR4.PAE
+    mov cr4, eax
+
+    // Enable paging and protected mode
+    mov eax, offset ptl4  - 0xFFFFFFFF80000000
+    mov cr3, eax
+    mov eax, cr0
+    or  eax, 0x80000001                        // CR0.PE, CR0.PG
+    mov cr0, eax
+
+    // Load GDT
+    //lgdt gdtr
+
+    // Reload DS
+    mov ax, (2 << 3)
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+    mov ss, ax
+
+    // Reload CS
+    .byte 0xEA
+    .long 2f
+    .short 0x0008
+2:
+    .align 8
+    .code64
+    // Set stack and call main_ap
+    mov rax, offset stack_top
+    mov rsp, rax
+    mov rbp, rax
+    call main_ap
+
+    .align 8
+    .code32
     .global __start
 __start:
     // Save multiboot paramters
@@ -85,21 +128,17 @@ __start:
     //jmp (1 << 3), main
     .byte 0xEA
     .long 2f
-    .short 0x0008
+    .short (1 << 3) // Kcode
 2:
     .code64
-    // Call main with multiboot parameters
+    // Set stack and call main with multiboot parameters (never return!)
     mov rax, offset stack_top
-    sub rax, 16
-    add rax, 8
     mov rsp, rax
     mov rbp, rax
 
-    push rbp
-    mov  rbp, rsp
     push rsi
     push rdi
-    call main
+    call main // SysV ABI
 
 gdtr:
     .short (8 * 7) - 1

@@ -1,7 +1,7 @@
 fn main() {
     let target = std::env::var("TARGET").unwrap();
-    println!("cargo:rerun-if-changed=kernel/{}.ld", target);
-    println!("cargo:rustc-link-arg=-Tkernel/{}.ld", target);
+    println!("cargo:rerun-if-changed=krnl/{}.ld", target);
+    println!("cargo:rustc-link-arg=-Tkrnl/{}.ld", target);
 
     bindgen::Builder::default()
         .use_core()

@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod pg;
 mod pm;
 mod vm;
 
-pub mod pg;
 pub mod sm;
 
 pub use pm::*;
@@ -25,11 +25,16 @@ use core::{cell, mem, ptr};
 
 use crate::{multiboot, util::Bitmap};
 
-pub(crate) fn init_virt_mem() {
+extern "C" {
+    pub static KERNEL_LMA: u8;
+    pub static KERNEL_VMA: u8;
+}
+
+pub fn init_virt_mem() {
     (unsafe { &mut *(pg::PAGE_TABLE) })[pg::Page(0)].unmap(); // identity
 }
 
-pub(crate) fn init_phys_mem_bare() {
+pub fn init_phys_mem_bare() {
     static PHYS_MEM: cell::SyncUnsafeCell<[usize; 2048 / usize::BITS as usize]> =
         cell::SyncUnsafeCell::new([0; 2048 / usize::BITS as usize]);
 
@@ -46,7 +51,7 @@ pub(crate) fn init_phys_mem_bare() {
     phys_mem.mark_used(0, 1024); // system & kernel
 }
 
-pub(crate) fn init_phys_mem_e820(phys_mem_map: &[multiboot::multiboot_mmap_entry]) {
+pub fn init_phys_mem_e820(phys_mem_map: &[multiboot::multiboot_mmap_entry]) {
     let phys_mem_max: usize = phys_mem_map
         .iter()
         .filter(|phys_mem_entry| phys_mem_entry.type_ == multiboot::MULTIBOOT_MEMORY_AVAILABLE)

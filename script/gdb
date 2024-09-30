@@ -1,2 +1,0 @@
-file target/i386-unknown-meerkat/debug/meerkat_kernel
-target remote localhost:1234

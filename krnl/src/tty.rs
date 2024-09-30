@@ -2,7 +2,7 @@ use core::fmt::{self, Write};
 
 use spin::Mutex;
 
-use crate::KERNEL_VMA;
+use crate::mm;
 
 const BUFFER_HEIGHT: usize = 25;
 const BUFFER_WIDTH: usize = 80;
@@ -61,7 +61,7 @@ impl Default for TtySubscriber {
     fn default() -> Self {
         Self(Mutex::new(Tty {
             buffer: unsafe {
-                &mut *((0xB8000 + (&KERNEL_VMA as *const u8 as usize))
+                &mut *((0xB8000 + (&mm::KERNEL_VMA as *const u8 as usize))
                     as *mut [[u16; BUFFER_WIDTH]; BUFFER_HEIGHT])
             },
             column: 0,
@@ -99,6 +99,6 @@ impl<'tty> tracing::field::Visit for TtyFieldVisitor<'tty> {
     }
 }
 
-pub(super) fn init_logging() {
+pub fn init_logging() {
     let _ = tracing::subscriber::set_global_default(TtySubscriber::default());
 }

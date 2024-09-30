@@ -43,12 +43,12 @@ impl PhysicalMemory {
 
     pub fn mark_used(&mut self, frame_start: usize, count: usize) {
         self.used.set_ones(frame_start..frame_start + count);
-        self.free -= count; // TODO: count 0's
+        self.free -= count;
     }
 
     pub fn mark_free(&mut self, frame_start: usize, count: usize) {
         self.used.set_zeros(frame_start..frame_start + count);
-        self.free += count; // TODO: count 1's
+        self.free += count;
     }
 
     pub fn find_free(&mut self, count: usize) -> Option<usize> {

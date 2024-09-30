@@ -16,8 +16,9 @@
 #![no_main]
 #![feature(abi_x86_interrupt, sync_unsafe_cell, negative_impls)]
 
-use core::{arch, hint, panic, slice};
+use core::{arch, hint, panic, ptr::NonNull, slice};
 
+use mm::VirtualMemory;
 use tracing::{error, info};
 
 #[macro_use]
@@ -39,11 +40,6 @@ mod multiboot {
     include!(concat!(env!("OUT_DIR"), "/multiboot.rs"));
 }
 
-extern "C" {
-    static KERNEL_LMA: u8;
-    static KERNEL_VMA: u8;
-}
-
 #[cfg(target_arch = "x86")]
 arch::global_asm!(include_str!("x86.S"));
 #[cfg(target_arch = "x86_64")]
@@ -58,7 +54,7 @@ fn main(multiboot_magic: u32, multiboot_info: u32) -> ! {
         halt();
     }
     let multiboot_info = unsafe {
-        &*((multiboot_info as usize + (&KERNEL_VMA as *const u8 as usize))
+        &*((multiboot_info as usize + (&mm::KERNEL_VMA as *const u8 as usize))
             as *const multiboot::multiboot_info)
     };
     if multiboot_info.flags & multiboot::MULTIBOOT_INFO_MEM_MAP == 0 {
@@ -69,7 +65,7 @@ fn main(multiboot_magic: u32, multiboot_info: u32) -> ! {
     mm::init_phys_mem_bare();
     mm::init_phys_mem_e820(unsafe {
         slice::from_raw_parts(
-            (multiboot_info.mmap_addr as usize + (&KERNEL_VMA as *const u8 as usize))
+            (multiboot_info.mmap_addr as usize + (&mm::KERNEL_VMA as *const u8 as usize))
                 as *const multiboot::multiboot_mmap_entry,
             multiboot_info.mmap_length as usize / size_of::<multiboot::multiboot_mmap_entry>(),
         )
@@ -79,9 +75,16 @@ fn main(multiboot_magic: u32, multiboot_info: u32) -> ! {
 
     info!("Meerkat Operating System {}", env!("CARGO_PKG_VERSION"));
 
-    sm::run();
+    unsafe { acpica::AcpiEnterSleepState(5) };
 
-    panic!("It is now safe to turn off your machine.");
+    halt()
+}
+
+#[no_mangle]
+fn main_ap() -> ! {
+    info!("Meerkat Operating System {}", env!("CARGO_PKG_VERSION"));
+
+    halt()
 }
 
 #[panic_handler]

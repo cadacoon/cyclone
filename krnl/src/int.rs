@@ -113,8 +113,6 @@ struct StackFrame {
     ip: usize,
     cs: u16,
     flags: usize,
-    #[cfg(target_arch = "x86_64")]
     sp: usize,
-    #[cfg(target_arch = "x86_64")]
     ss: u16,
 }

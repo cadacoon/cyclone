@@ -16,7 +16,7 @@ use core::{alloc, ptr};
 
 use super::{
     pg::{Page, BYTES_PER_PAGE, PAGES_PER_TABLE, PAGES_TOTAL, PAGE_TABLE},
-    PHYS_MEM,
+    KERNEL_VMA, PHYS_MEM,
 };
 
 #[global_allocator]
@@ -25,7 +25,6 @@ pub static VIRT_MEM: VirtualMemory = VirtualMemory;
 pub struct VirtualMemory;
 
 impl VirtualMemory {
-    /// Maps frames to free pages
     pub fn map(&self, page_start: Page, frame_start: usize, count: usize) -> Option<Page> {
         let page_start = self.find_free(page_start, count)?;
         for (page, frame) in
@@ -49,13 +48,11 @@ impl VirtualMemory {
         Some(page_start)
     }
 
-    /// Allocates free frames and maps them to free pages
     pub fn allocate(&self, page_start: Page, count: usize) -> Option<Page> {
         self.allocate_contiguous(page_start, count)
             .map(|(page_start, _)| page_start)
     }
 
-    /// Allocates free frames and maps them to free pages
     pub fn allocate_contiguous(&self, page_start: Page, count: usize) -> Option<(Page, usize)> {
         let frame_start;
         {
@@ -68,7 +65,6 @@ impl VirtualMemory {
         Some((page_start, frame_start))
     }
 
-    /// Frees pages and frames
     pub fn free(&self, page_start: Page, count: usize) {
         let mut phys_mem = PHYS_MEM.lock();
         for page in page_start.0..page_start.0 + count {
@@ -89,7 +85,6 @@ impl VirtualMemory {
         }
     }
 
-    /// Finds free pages
     fn find_free(&self, page_start: Page, count: usize) -> Option<Page> {
         let mut page_start = page_start.0;
         let mut consecutive_pages = 0;
@@ -131,7 +126,7 @@ impl VirtualMemory {
 unsafe impl alloc::GlobalAlloc for VirtualMemory {
     unsafe fn alloc(&self, layout: alloc::Layout) -> *mut u8 {
         let pages = layout.size().div_ceil(BYTES_PER_PAGE);
-        self.allocate(Page(1), pages)
+        self.allocate(Page((&KERNEL_VMA as *const u8 as usize) >> 12), pages)
             .map_or(ptr::null_mut(), |page_start| page_start.addr())
     }
 
@@ -139,15 +134,5 @@ unsafe impl alloc::GlobalAlloc for VirtualMemory {
         let page_start = Page(virt_addr as usize / BYTES_PER_PAGE);
         let pages = layout.size().div_ceil(BYTES_PER_PAGE);
         self.free(page_start, pages);
-    }
-}
-
-impl Clone for VirtualMemory {
-    fn clone(&self) -> Self {}
-}
-
-impl Drop for VirtualMemory {
-    fn drop(&mut self) {
-        todo!()
     }
 }
