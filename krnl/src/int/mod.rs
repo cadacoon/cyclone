@@ -14,7 +14,7 @@
 
 use core::{arch, mem, ptr};
 
-static mut DESCRIPTOR_TABLE: [Descriptor; 256] = [Descriptor::zeroed(); 256];
+static mut DESCRIPTOR_TABLE: [Descriptor; 32 + 16] = [Descriptor::zeroed(); 32 + 16];
 
 #[repr(C, packed(2))]
 struct DescriptorTableRegister {
@@ -68,34 +68,9 @@ enum DescriptorGateType {
     Trap = 0xF,
 }
 
-const DE: usize = 0x00; // Division Error
-const DB: usize = 0x01; // Debug
-const BP: usize = 0x03; // Breakpoint
-const OF: usize = 0x04; // Overflow
-const BR: usize = 0x05; // Bound Range Exceeded
-const UD: usize = 0x06; // Invalid Opcode
-const NM: usize = 0x07; // Device Not Available
-const DF: usize = 0x08; // Double Fault
-const TS: usize = 0x0A; // Invalid TSS
-const NP: usize = 0x0B; // Segment Not Present
-const SS: usize = 0x0C; // Stack-Segment Fault
-const GP: usize = 0x0D; // General Protection Fault
-const PF: usize = 0x0E; // Page Fault
-const MF: usize = 0x10; // x87 Floating-Point Exception
-const AC: usize = 0x11; // Alignment Check
-const MC: usize = 0x12; // Machine Check
-const XF: usize = 0x13; // SIMD Floating-Point Exception
-const VE: usize = 0x14; // Virtualization Exception
-const CP: usize = 0x15; // Control Protection Exception
-const HV: usize = 0x1C; // Hypervisor Injection Exception
-const VC: usize = 0x1D; // VMM Communication Exception
-const SX: usize = 0x1E; // Security Exception
-
 pub fn init() {
-    // Setup the IDT
-    unsafe {}
+    init_ivt();
 
-    // Update the IDT
     unsafe {
         let idtr = DescriptorTableRegister {
             size: (mem::size_of_val(&DESCRIPTOR_TABLE) - 1) as u16,
@@ -116,3 +91,68 @@ struct StackFrame {
     sp: usize,
     ss: u16,
 }
+
+macro_rules! ivt {
+    ($($vector:tt $name:ident $description:tt),*$(,)?) => {
+        fn init_ivt() {
+            unsafe {
+                $(DESCRIPTOR_TABLE[$vector] = Descriptor::new($name as usize, 1 << 3, DescriptorGateType::Interrupt, 0, 0);)*
+            }
+        }
+
+        $(extern "x86-interrupt" fn $name() {
+            tracing::trace!($description)
+        })*
+    };
+}
+
+ivt!(
+    0x00 exc_de "Division Error",
+    0x01 exc_db "Debug",
+    0x02 exc_02 "Exception 2",
+    0x03 exc_bp "Breakpoint",
+    0x04 exc_of "Overflow",
+    0x05 exc_br "Bound Range Exceeded",
+    0x06 exc_ud "Invalid Opcode",
+    0x07 exc_nm "Device Not Available",
+    0x08 exc_df "Double Fault",
+    0x09 exc_09 "Exception 9",
+    0x0A exc_ts "Invalid TSS",
+    0x0B exc_np "Segment Not Present",
+    0x0C exc_ss "Stack-Segment Fault",
+    0x0D exc_gp "General Protection Fault",
+    0x0E exc_pf "Page Fault",
+    0x0F exc_15 "Exception 15",
+    0x10 exc_mf "x87 Floating-Point Exception",
+    0x11 exc_ac "Alignment Check",
+    0x12 exc_mc "Machine Check",
+    0x13 exc_xf "SIMD Floating-Point Exception",
+    0x14 exc_ve "Virtualization Exception",
+    0x15 exc_cp "Control Protection Exception",
+    0x16 exc_22 "Exception 22",
+    0x17 exc_23 "Exception 23",
+    0x18 exc_24 "Exception 24",
+    0x19 exc_25 "Exception 25",
+    0x1A exc_26 "Exception 26",
+    0x1B exc_27 "Exception 27",
+    0x1C exc_hv "Hypervisor Injection Exception",
+    0x1D exc_vc "VMM Communication Exception",
+    0x1E exc_sx "Security Exception",
+    0x1F exc_31 "Exception 31",
+    0x20 irq_00 "IRQ 0",
+    0x21 irq_01 "IRQ 1",
+    0x22 irq_02 "IRQ 2",
+    0x23 irq_03 "IRQ 3",
+    0x24 irq_04 "IRQ 4",
+    0x25 irq_05 "IRQ 5",
+    0x26 irq_06 "IRQ 6",
+    0x27 irq_07 "IRQ 7",
+    0x28 irq_08 "IRQ 8",
+    0x29 irq_09 "IRQ 9",
+    0x2A irq_10 "IRQ 10",
+    0x2B irq_11 "IRQ 11",
+    0x2C irq_12 "IRQ 12",
+    0x2D irq_13 "IRQ 13",
+    0x2E irq_14 "IRQ 14",
+    0x2F irq_15 "IRQ 15",
+);

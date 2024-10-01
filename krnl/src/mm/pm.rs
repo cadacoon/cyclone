@@ -16,7 +16,7 @@ use core::{mem, ptr};
 
 use spin::Mutex;
 
-use crate::util::Bitmap;
+use crate::bitmap::Bitmap;
 
 pub static PHYS_MEM: Mutex<PhysicalMemory> = Mutex::new(PhysicalMemory::new(
     Bitmap::new(unsafe {

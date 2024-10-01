@@ -19,28 +19,24 @@
 //////////////////////////////////////////////////////////////////
 __start_ap:
     .code16
-    // Enable long mode
     mov   ecx, 0xC0000080 // EFER
     rdmsr
     or    eax, 0x00000100 // EFER.LME
     wrmsr
 
-    // Enable PAE
     mov eax, cr4
     or  eax, 0x00000020 // CR4.PAE
     mov cr4, eax
 
-    // Enable paging and protected mode
-    mov eax, offset ptl4  - 0xFFFFFFFF80000000
+    mov eax, offset ptl4 - 0xFFFFFFFF80000000
     mov cr3, eax
+
     mov eax, cr0
-    or  eax, 0x80000001                        // CR0.PE, CR0.PG
+    or  eax, 0x80000001 // CR0.PE, CR0.PG
     mov cr0, eax
 
-    // Load GDT
-    //lgdt gdtr
+    #lgdt gdtr_32
 
-    // Reload DS
     mov ax, (2 << 3) // KDATA
     mov ds, ax
     mov es, ax
@@ -48,14 +44,12 @@ __start_ap:
     mov gs, ax
     mov ss, ax
 
-    // Reload CS
     //jmp (1 << 3), 2f
     .byte 0xEA
     .long 2f
     .short (1 << 3) // KCODE
 2:
     .code64
-    // Set stack and call main_ap
     mov rax, offset stack_top
     mov rsp, rax
     mov rbp, rax
@@ -67,22 +61,18 @@ __start_ap:
     .global __start
 __start:
     .code32
-    // Save multiboot paramters
     mov edi, eax
     mov esi, ebx
 
-    // Enable long mode
     mov   ecx, 0xC0000080 // EFER
     rdmsr
     or    eax, 0x00000100 // EFER.LME
     wrmsr
 
-    // Enable PAE
     mov eax, cr4
     or  eax, 0x00000020 // CR4.PAE
     mov cr4, eax
 
-    // Fill page table 1
     mov eax, offset ptl1 - 0xFFFFFFFF80000000
     mov ecx, 0x3                              // P R/W
 1:
@@ -92,34 +82,27 @@ __start:
     cmp ecx  , 0x00200003
     jnz 1b
 
-    // Fill page table 2
     mov eax                   , offset ptl2 - 0xFFFFFFFF80000000
     mov long ptr [eax + 0x000], offset ptl1 - 0xFFFFFFFF80000000 + 0x3 // P R/W 000: 1
 
-    // Fill page table 3i
     mov eax                   , offset ptl3i - 0xFFFFFFFF80000000
     mov long ptr [eax + 0x000], offset ptl2 - 0xFFFFFFFF80000000 + 0x3 // P R/W 000: 2
 
-    // Fill page table 3
     mov eax                   , offset ptl3 - 0xFFFFFFFF80000000
     mov long ptr [eax + 0xFF0], offset ptl2 - 0xFFFFFFFF80000000 + 0x3 // P R/W 776: 2
 
-    // Fill page table 4
     mov eax                   , offset ptl4  - 0xFFFFFFFF80000000
     mov long ptr [eax + 0xFF0], offset ptl4  - 0xFFFFFFFF80000000 + 0x3 // P R/W 776: 4
     mov long ptr [eax + 0x000], offset ptl3i - 0xFFFFFFFF80000000 + 0x3 // P R/W 000: 3i
     mov long ptr [eax + 0xFF8], offset ptl3  - 0xFFFFFFFF80000000 + 0x3 // P R/W 777: 3
     mov cr3, eax
 
-    // Enable paging
     mov eax, cr0
     or  eax, 0x80000000 // CR0.PG
     mov cr0, eax
 
-    // Load GDT
-    lgdt gdtr
+    lgdt gdtr_32
 
-    // Reload DS
     mov ax, (2 << 3) // KDATA
     mov ds, ax
     mov es, ax
@@ -127,14 +110,14 @@ __start:
     mov gs, ax
     mov ss, ax
 
-    // Reload CS
     //jmp (1 << 3), 2f
     .byte 0xEA
     .long 2f
     .short (1 << 3) // KCODE
 2:
     .code64
-    // Set stack and call main with multiboot parameters (never return!)
+    lgdt gdtr_64
+
     mov rax, offset stack_top
     mov rsp, rax
     mov rbp, rax
@@ -143,9 +126,13 @@ __start:
     push rdi
     call main
 
-gdtr:
+gdtr_32:
     .short (8 * 7) - 1
     .quad DESCRIPTOR_TABLE - 0xFFFFFFFF80000000
+
+gdtr_64:
+    .short (8 * 7) - 1
+    .quad DESCRIPTOR_TABLE
 
 
 
@@ -161,9 +148,9 @@ __context_swap:
     push r13
     push r14
     push r15
-    mov [rsi], rsp
+    mov [rdi], rsp
 
-    mov rsp, rdi
+    mov rsp, rsi
     pop r15
     pop r14
     pop r13

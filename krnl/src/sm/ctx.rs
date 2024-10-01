@@ -12,13 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use core::{mem, ptr};
+
 #[repr(transparent)]
-pub struct Context(pub usize);
+pub struct Context(Option<ptr::NonNull<()>>);
+
+unsafe impl Sync for Context {}
 
 impl Context {
-    pub unsafe fn new(entry_point: fn() -> (), stack_base: *mut (), stack_size: usize) -> Self {
+    pub const fn zeroed() -> Self {
+        Self(None)
+    }
+
+    pub unsafe fn new(entry_point: fn() -> !, stack_base: *mut (), stack_size: usize) -> Self {
         let mut stack = stack_base.byte_add(stack_size) as *mut usize;
-        stack = stack.sub(1); // rip
+        stack = stack.sub(1); // eip/rip
         stack.write(entry_point as usize);
         #[cfg(target_arch = "x86")]
         {
@@ -28,16 +36,16 @@ impl Context {
         {
             stack = stack.sub(6); // rbx, rbp, r12, r13, r14, r15
         }
-        Self(stack as usize)
+        Self(Some(ptr::NonNull::new_unchecked(stack as *mut ())))
     }
 
-    pub fn swap(&mut self, new_context: &Self) {
+    pub fn swap(current: &mut Self, target: &Self) {
         unsafe {
-            __context_swap(new_context.0, &mut self.0);
+            __context_swap(mem::transmute(current), target.0.unwrap().as_ptr());
         }
     }
 }
 
 extern "C" {
-    fn __context_swap(new_context: usize, old_context: &mut usize);
+    fn __context_swap(current: &mut *mut (), target: *mut ());
 }

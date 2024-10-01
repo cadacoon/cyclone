@@ -15,6 +15,7 @@
 #![no_std]
 #![no_main]
 #![feature(abi_x86_interrupt, sync_unsafe_cell, negative_impls)]
+#![allow(dead_code)]
 
 use core::{arch, hint, panic, slice};
 
@@ -23,11 +24,12 @@ use tracing::{error, info};
 #[macro_use]
 extern crate alloc;
 
+mod bitmap;
 mod int;
+mod io;
 mod mm;
 mod sm;
 mod tty;
-mod util;
 
 #[cfg(target_arch = "x86")]
 arch::global_asm!(include_str!("x86.S"));
@@ -36,9 +38,6 @@ arch::global_asm!(include_str!("x86_64.S"));
 
 #[no_mangle]
 fn main(multiboot_magic: u32, multiboot_info: u32) -> ! {
-    mm::sm::init();
-    int::init();
-
     if multiboot_magic != multiboot::MULTIBOOT_BOOTLOADER_MAGIC {
         halt();
     }
@@ -50,6 +49,7 @@ fn main(multiboot_magic: u32, multiboot_info: u32) -> ! {
         halt();
     }
 
+    int::init();
     mm::init_virt_mem();
     mm::init_phys_mem_bare();
     mm::init_phys_mem_e820(unsafe {
@@ -63,6 +63,10 @@ fn main(multiboot_magic: u32, multiboot_info: u32) -> ! {
     tty::init_logging();
 
     info!("Meerkat Operating System {}", env!("CARGO_PKG_VERSION"));
+
+    unsafe {
+        arch::asm!("sti");
+    }
 
     halt();
 }

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use core::{arch, mem, ptr};
+use core::mem;
 
 const DESCRIPTOR_NULL: u16 = 0;
 const DESCRIPTOR_KCODE: u16 = 1;
@@ -206,44 +206,5 @@ struct TaskStateSegment {
 impl TaskStateSegment {
     const fn zeroed() -> Self {
         unsafe { mem::MaybeUninit::zeroed().assume_init() }
-    }
-}
-
-pub fn init() {
-    // Correct the GDT address
-    #[cfg(target_arch = "x86_64")]
-    unsafe {
-        let gdtr = DescriptorTableRegister {
-            size: (mem::size_of_val(&DESCRIPTOR_TABLE) - 1) as u16,
-            offset: (ptr::addr_of!(DESCRIPTOR_TABLE)) as usize,
-        };
-        arch::asm!(
-            "lgdt [{}]", in(reg) &gdtr, options(readonly, nostack, preserves_flags)
-        )
-    }
-
-    // Setup the TSS
-    let addr = (ptr::addr_of!(TASK_STATE_SEGMENT)) as usize;
-    let size = mem::size_of::<TaskStateSegment>() - 1;
-    unsafe {
-        DESCRIPTOR_TABLE[DESCRIPTOR_TSS as usize] = Descriptor::new(
-            addr as u32,
-            size as u32,
-            DescriptorAccess::A
-                .union(DescriptorAccess::E)
-                .union(DescriptorAccess::P),
-            0,
-            DescriptorFlags::empty(),
-        );
-    }
-    #[cfg(target_arch = "x86_64")]
-    unsafe {
-        DESCRIPTOR_TABLE[DESCRIPTOR_TSS as usize + 1].limit_0_15 = (addr >> 32) as u16;
-        DESCRIPTOR_TABLE[DESCRIPTOR_TSS as usize + 1].base_0_15 = (addr >> 48) as u16;
-    }
-
-    // Update the TSS
-    unsafe {
-        arch::asm!("ltr {0:x}", in(reg) (DESCRIPTOR_TSS << 3) as u32, options(nostack, preserves_flags))
     }
 }

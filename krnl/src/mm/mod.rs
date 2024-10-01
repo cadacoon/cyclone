@@ -14,16 +14,15 @@
 
 mod pg;
 mod pm;
+mod sm;
 mod vm;
-
-pub mod sm;
 
 pub use pm::*;
 pub use vm::*;
 
 use core::{cell, mem, ptr};
 
-use crate::util::Bitmap;
+use crate::bitmap::Bitmap;
 
 extern "C" {
     pub static KERNEL_LMA: u8;

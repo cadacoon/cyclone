@@ -1,0 +1,6 @@
+[
+  {
+    "label": "Build & Run",
+    "command": "cargo build -p krnl --target i386-unknown-meerkat.json && qemu-system-i386 -m 8G -kernel target/i386-unknown-meerkat/debug/krnl -no-reboot -no-shutdown -s -d int"
+  }
+]

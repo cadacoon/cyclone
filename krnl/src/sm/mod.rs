@@ -12,4 +12,51 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod context;
+mod ctx;
+
+use core::arch;
+
+use alloc::{boxed::Box, collections::vec_deque::VecDeque};
+
+struct Scheduler {
+    queue: VecDeque<Schedulable>,
+    prev: Schedulable,
+    next: Option<Schedulable>,
+}
+
+impl Scheduler {
+    pub fn run(&mut self) {
+        unsafe {
+            arch::asm!("cli");
+        }
+        while let Some(next) = self.queue.pop_front() {
+            self.next = Some(next);
+            ctx::Context::swap(&mut self.prev.context, &self.next.as_ref().unwrap().context);
+        }
+        unsafe {
+            arch::asm!("sti");
+        }
+    }
+
+    pub fn r#yield(&mut self) {
+        self.queue.push_back(self.next.take().unwrap());
+        ctx::Context::swap(
+            &mut self.queue.back_mut().unwrap().context,
+            &self.prev.context,
+        );
+    }
+}
+
+struct Schedulable {
+    stack: Box<[u8]>,
+    context: ctx::Context,
+}
+
+impl Schedulable {
+    pub fn new(entry_point: fn() -> !) -> Self {
+        let mut stack = unsafe { Box::<[u8; 16 * 1024]>::new_uninit().assume_init() };
+        let context =
+            unsafe { ctx::Context::new(entry_point, stack.as_mut_ptr() as *mut (), 16 * 1024) };
+        Self { stack, context }
+    }
+}
