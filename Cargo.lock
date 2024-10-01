@@ -70,14 +70,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "drv_pci"
-version = "0.1.0"
-
-[[package]]
-name = "drv_pci_ide"
-version = "0.1.0"
-
-[[package]]
 name = "either"
 version = "1.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -104,6 +96,7 @@ version = "0.1.0"
 dependencies = [
  "bindgen",
  "bitflags",
+ "multiboot",
  "spin",
  "tracing",
  "volatile",
@@ -152,6 +145,13 @@ name = "minimal-lexical"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
+
+[[package]]
+name = "multiboot"
+version = "0.1.0"
+dependencies = [
+ "bindgen",
+]
 
 [[package]]
 name = "nom"
@@ -252,18 +252,6 @@ checksum = "6980e8d7511241f8acf4aebddbb1ff938df5eebe98691418c4468d0b72a96a67"
 dependencies = [
  "lock_api",
 ]
-
-[[package]]
-name = "srv_fs_fat"
-version = "0.1.0"
-
-[[package]]
-name = "srv_fs_tmpfs"
-version = "0.1.0"
-
-[[package]]
-name = "srv_vfs"
-version = "0.1.0"
 
 [[package]]
 name = "syn"

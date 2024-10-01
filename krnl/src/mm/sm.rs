@@ -28,9 +28,9 @@ const DESCRIPTORS: usize = 7;
 
 #[no_mangle]
 static mut DESCRIPTOR_TABLE: [Descriptor; DESCRIPTORS] = [
-    // Null
+    // NULL
     Descriptor::zeroed(),
-    // Kcode
+    // KCODE
     Descriptor::new(
         0x00000000,
         0xFFFFF,
@@ -45,7 +45,7 @@ static mut DESCRIPTOR_TABLE: [Descriptor; DESCRIPTORS] = [
         #[cfg(target_arch = "x86_64")]
         DescriptorFlags::L.union(DescriptorFlags::G),
     ),
-    // Kdata
+    // KDATA
     Descriptor::new(
         0x00000000,
         0xFFFFF,
@@ -56,7 +56,7 @@ static mut DESCRIPTOR_TABLE: [Descriptor; DESCRIPTORS] = [
         0,
         DescriptorFlags::DB.union(DescriptorFlags::G),
     ),
-    // Ucode
+    // UCODE
     Descriptor::new(
         0x00000000,
         0xFFFFF,
@@ -71,7 +71,7 @@ static mut DESCRIPTOR_TABLE: [Descriptor; DESCRIPTORS] = [
         #[cfg(target_arch = "x86_64")]
         DescriptorFlags::L.union(DescriptorFlags::G),
     ),
-    // Udata
+    // UDATA
     Descriptor::new(
         0x00000000,
         0xFFFFF,

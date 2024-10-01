@@ -2,11 +2,8 @@
 resolver = "2"
 members = [
     "krnl",
-    "srv/vfs",
-    "srv/fs/fat",
-    "srv/fs/tmpfs",
-    "drv/pci",
-    "drv/pci/ide",
+    #"lib/acpica",
+    "lib/multiboot",
 ]
 
 [profile.dev]

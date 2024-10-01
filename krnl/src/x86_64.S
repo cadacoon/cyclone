@@ -12,12 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-    .extern main
-
     .section .multiboot.init, "a"
 
-    .code16
+//////////////////////////////////////////////////////////////////
+// __start_ap
+//////////////////////////////////////////////////////////////////
 __start_ap:
+    .code16
     // Enable long mode
     mov   ecx, 0xC0000080 // EFER
     rdmsr
@@ -40,7 +41,7 @@ __start_ap:
     //lgdt gdtr
 
     // Reload DS
-    mov ax, (2 << 3)
+    mov ax, (2 << 3) // KDATA
     mov ds, ax
     mov es, ax
     mov fs, ax
@@ -48,11 +49,11 @@ __start_ap:
     mov ss, ax
 
     // Reload CS
+    //jmp (1 << 3), 2f
     .byte 0xEA
     .long 2f
-    .short 0x0008
+    .short (1 << 3) // KCODE
 2:
-    .align 8
     .code64
     // Set stack and call main_ap
     mov rax, offset stack_top
@@ -60,10 +61,12 @@ __start_ap:
     mov rbp, rax
     call main_ap
 
-    .align 8
-    .code32
+//////////////////////////////////////////////////////////////////
+// __start
+//////////////////////////////////////////////////////////////////
     .global __start
 __start:
+    .code32
     // Save multiboot paramters
     mov edi, eax
     mov esi, ebx
@@ -117,7 +120,7 @@ __start:
     lgdt gdtr
 
     // Reload DS
-    mov ax, (2 << 3)
+    mov ax, (2 << 3) // KDATA
     mov ds, ax
     mov es, ax
     mov fs, ax
@@ -125,10 +128,10 @@ __start:
     mov ss, ax
 
     // Reload CS
-    //jmp (1 << 3), main
+    //jmp (1 << 3), 2f
     .byte 0xEA
     .long 2f
-    .short (1 << 3) // Kcode
+    .short (1 << 3) // KCODE
 2:
     .code64
     // Set stack and call main with multiboot parameters (never return!)
@@ -138,17 +141,44 @@ __start:
 
     push rsi
     push rdi
-    call main // SysV ABI
+    call main
 
 gdtr:
     .short (8 * 7) - 1
     .quad DESCRIPTOR_TABLE - 0xFFFFFFFF80000000
 
+
+
+    .section .text
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+// __context_swap
+////////////////////////////////////////////////////////////////////////////////////////////////////
+__context_swap:
+    push rbx
+    push rbp
+    push r12
+    push r13
+    push r14
+    push r15
+    mov [rsi], rsp
+
+    mov rsp, rdi
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbp
+    pop rbx
+    ret
+
+
+
     .section .bss
 
-    .align 16384
+    .align 16
 stack_bottom:
-    .zero 16384
+    .zero 16384 // 16 KB
 stack_top:
 
     .align 4096

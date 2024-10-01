@@ -12,12 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-    .extern main
-
     .section .multiboot.init, "a"
 
-    .code16
+////////////////////////////////////////////////////////////////////////////////////////////////////
+// __start_ap
+////////////////////////////////////////////////////////////////////////////////////////////////////
 __start_ap:
+    .code16
     // Enable paging and protected mode
     mov eax, offset ptl2 - 0xC0000000
     mov cr3, eax
@@ -29,7 +30,7 @@ __start_ap:
     //lgdt gdtr
 
     // Reload DS
-    mov ax, (2 << 3)
+    mov ax, (2 << 3) // KDATA
     mov ds, ax
     mov es, ax
     mov fs, ax
@@ -37,11 +38,11 @@ __start_ap:
     mov ss, ax
 
     // Reload CS
+    //jmp (1 << 3), 2f
     .byte 0xEA
     .long 2f
-    .short 0x0008
+    .short (1 << 3) // KCODE
 2:
-    .align 8
     .code32
     // Set stack and call main_ap
     mov eax, offset stack_top
@@ -49,10 +50,12 @@ __start_ap:
     mov ebp, eax
     call main_ap
 
-    .align 8
-    .code32
+////////////////////////////////////////////////////////////////////////////////////////////////////
+// __start
+////////////////////////////////////////////////////////////////////////////////////////////////////
     .global __start
 __start:
+    .code32
     // Save multiboot paramters
     mov edi, eax
     mov esi, ebx
@@ -83,7 +86,7 @@ __start:
     lgdt gdtr
 
     // Reload DS
-    mov ax, (2 << 3) // Ktext
+    mov ax, (2 << 3) // KDATA
     mov ds, ax
     mov es, ax
     mov fs, ax
@@ -91,10 +94,10 @@ __start:
     mov ss, ax
 
     // Reload CS
-    //jmp (1 << 3), main
+    //jmp (1 << 3), 2f
     .byte 0xEA
     .long 2f
-    .short (1 << 3) // Kcode
+    .short (1 << 3) // KCODE
 2:
     // Set stack and call main with multiboot parameters (never return!)
     mov eax, offset stack_top
@@ -103,17 +106,42 @@ __start:
 
     push esi
     push edi
-    call main // SysV ABI
+    call main
 
 gdtr:
     .short (8 * 6) - 1
     .long DESCRIPTOR_TABLE
 
+
+
+    .section .text
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+// __context_swap
+////////////////////////////////////////////////////////////////////////////////////////////////////
+__context_swap:
+    mov eax, [esp + 0x04]
+    mov edx, [esp + 0x08]
+    push ebx
+    push ebp
+    push esi
+    push edi
+    mov [edx], esp
+
+    mov esp, eax
+    pop edi
+    pop esi
+    pop ebp
+    pop ebx
+    ret
+
+
+
     .section .bss
 
-    .align 16384
+    .align 16
 stack_bottom:
-    .zero 16384
+    .zero 16384 // 16 KB
 stack_top:
 
     .align 4096

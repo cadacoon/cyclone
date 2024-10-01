@@ -16,9 +16,8 @@
 #![no_main]
 #![feature(abi_x86_interrupt, sync_unsafe_cell, negative_impls)]
 
-use core::{arch, hint, panic, ptr::NonNull, slice};
+use core::{arch, hint, panic, slice};
 
-use mm::VirtualMemory;
 use tracing::{error, info};
 
 #[macro_use]
@@ -29,16 +28,6 @@ mod mm;
 mod sm;
 mod tty;
 mod util;
-
-#[allow(
-    dead_code,
-    non_camel_case_types,
-    non_snake_case,
-    non_upper_case_globals
-)]
-mod multiboot {
-    include!(concat!(env!("OUT_DIR"), "/multiboot.rs"));
-}
 
 #[cfg(target_arch = "x86")]
 arch::global_asm!(include_str!("x86.S"));
@@ -75,15 +64,11 @@ fn main(multiboot_magic: u32, multiboot_info: u32) -> ! {
 
     info!("Meerkat Operating System {}", env!("CARGO_PKG_VERSION"));
 
-    unsafe { acpica::AcpiEnterSleepState(5) };
-
-    halt()
+    halt();
 }
 
 #[no_mangle]
 fn main_ap() -> ! {
-    info!("Meerkat Operating System {}", env!("CARGO_PKG_VERSION"));
-
     halt()
 }
 

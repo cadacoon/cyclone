@@ -6,7 +6,6 @@ use core::{hint, panic};
 /*
 Go through BlockDevice<IDE> IPC queue
 */
-#[no_mangle]
 fn main() {}
 
 #[panic_handler]

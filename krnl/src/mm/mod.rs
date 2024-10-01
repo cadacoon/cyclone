@@ -23,7 +23,7 @@ pub use vm::*;
 
 use core::{cell, mem, ptr};
 
-use crate::{multiboot, util::Bitmap};
+use crate::util::Bitmap;
 
 extern "C" {
     pub static KERNEL_LMA: u8;
