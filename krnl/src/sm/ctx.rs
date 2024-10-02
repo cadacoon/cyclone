@@ -19,6 +19,8 @@ pub struct Context(Option<ptr::NonNull<()>>);
 
 unsafe impl Sync for Context {}
 
+unsafe impl Send for Context {}
+
 impl Context {
     pub const fn zeroed() -> Self {
         Self(None)

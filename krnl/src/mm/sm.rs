@@ -14,20 +14,13 @@
 
 use core::mem;
 
-const DESCRIPTOR_NULL: u16 = 0;
-const DESCRIPTOR_KCODE: u16 = 1;
-const DESCRIPTOR_KDATA: u16 = 2;
-const DESCRIPTOR_UCODE: u16 = 3;
-const DESCRIPTOR_UDATA: u16 = 4;
-const DESCRIPTOR_TSS: u16 = 5;
-
 #[cfg(target_arch = "x86")]
 const DESCRIPTORS: usize = 6;
 #[cfg(target_arch = "x86_64")]
 const DESCRIPTORS: usize = 7;
 
 #[no_mangle]
-static mut DESCRIPTOR_TABLE: [Descriptor; DESCRIPTORS] = [
+static DESCRIPTOR_TABLE: [Descriptor; DESCRIPTORS] = [
     // NULL
     Descriptor::zeroed(),
     // KCODE

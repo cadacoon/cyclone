@@ -14,7 +14,7 @@
 
 #![no_std]
 #![no_main]
-#![feature(abi_x86_interrupt, sync_unsafe_cell, negative_impls)]
+#![feature(abi_x86_interrupt, sync_unsafe_cell, negative_impls, box_vec_non_null)]
 #![allow(dead_code)]
 
 use core::{arch, hint, panic, slice};
@@ -25,7 +25,6 @@ use tracing::{error, info};
 extern crate alloc;
 
 mod bitmap;
-mod int;
 mod io;
 mod mm;
 mod sm;
@@ -49,7 +48,7 @@ fn main(multiboot_magic: u32, multiboot_info: u32) -> ! {
         halt();
     }
 
-    int::init();
+    io::int::init();
     mm::init_virt_mem();
     mm::init_phys_mem_bare();
     mm::init_phys_mem_e820(unsafe {
@@ -64,9 +63,7 @@ fn main(multiboot_magic: u32, multiboot_info: u32) -> ! {
 
     info!("Meerkat Operating System {}", env!("CARGO_PKG_VERSION"));
 
-    unsafe {
-        arch::asm!("sti");
-    }
+    sm::init_and_run();
 
     halt();
 }

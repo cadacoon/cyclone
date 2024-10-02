@@ -14,65 +14,28 @@
 
     .section .multiboot.init, "a"
 
-//////////////////////////////////////////////////////////////////
-// __start_ap
-//////////////////////////////////////////////////////////////////
-__start_ap:
-    .code16
-    mov   ecx, 0xC0000080 // EFER
-    rdmsr
-    or    eax, 0x00000100 // EFER.LME
-    wrmsr
-
-    mov eax, cr4
-    or  eax, 0x00000020 // CR4.PAE
-    mov cr4, eax
-
-    mov eax, offset ptl4 - 0xFFFFFFFF80000000
-    mov cr3, eax
-
-    mov eax, cr0
-    or  eax, 0x80000001 // CR0.PE, CR0.PG
-    mov cr0, eax
-
-    #lgdt gdtr_32
-
-    mov ax, (2 << 3) // KDATA
-    mov ds, ax
-    mov es, ax
-    mov fs, ax
-    mov gs, ax
-    mov ss, ax
-
-    //jmp (1 << 3), 2f
-    .byte 0xEA
-    .long 2f
-    .short (1 << 3) // KCODE
-2:
-    .code64
-    mov rax, offset stack_top
-    mov rsp, rax
-    mov rbp, rax
-    call main_ap
-
-//////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
 // __start
-//////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
     .global __start
 __start:
     .code32
+    // save multiboot arguments
     mov edi, eax
     mov esi, ebx
 
+    // enable long-mode
     mov   ecx, 0xC0000080 // EFER
     rdmsr
     or    eax, 0x00000100 // EFER.LME
     wrmsr
 
+    // enable PAE (required by long-mode)
     mov eax, cr4
     or  eax, 0x00000020 // CR4.PAE
     mov cr4, eax
 
+    // setup rudimentary page table
     mov eax, offset ptl1 - 0xFFFFFFFF80000000
     mov ecx, 0x3                              // P R/W
 1:
@@ -97,31 +60,30 @@ __start:
     mov long ptr [eax + 0xFF8], offset ptl3  - 0xFFFFFFFF80000000 + 0x3 // P R/W 777: 3
     mov cr3, eax
 
+    // enable paging
     mov eax, cr0
     or  eax, 0x80000000 // CR0.PG
     mov cr0, eax
 
+    // setup flat segmentation
     lgdt gdtr_32
-
-    mov ax, (2 << 3) // KDATA
-    mov ds, ax
-    mov es, ax
-    mov fs, ax
-    mov gs, ax
-    mov ss, ax
-
-    //jmp (1 << 3), 2f
+    mov  ax, (2 << 3) // KDATA
+    mov  ds, ax
+    mov  es, ax
+    mov  fs, ax
+    mov  gs, ax
+    mov  ss, ax
+    //jmp  (1 << 3), 2f
     .byte 0xEA
     .long 2f
     .short (1 << 3) // KCODE
-2:
-    .code64
+2:  .code64
     lgdt gdtr_64
 
+    // setup stack and call main with multiboot arguments
     mov rax, offset stack_top
     mov rsp, rax
     mov rbp, rax
-
     push rsi
     push rdi
     call main
@@ -141,6 +103,7 @@ gdtr_64:
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // __context_swap
 ////////////////////////////////////////////////////////////////////////////////////////////////////
+    .global __context_swap
 __context_swap:
     push rbx
     push rbp
