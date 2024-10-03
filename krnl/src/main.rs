@@ -19,15 +19,15 @@
 
 use core::{arch, hint, panic, slice};
 
-use tracing::{error, info};
+use tracing::error;
 
 #[macro_use]
 extern crate alloc;
 
 mod bitmap;
+mod ex;
 mod io;
 mod mm;
-mod sm;
 mod tty;
 
 #[cfg(target_arch = "x86")]
@@ -36,19 +36,22 @@ arch::global_asm!(include_str!("x86.S"));
 arch::global_asm!(include_str!("x86_64.S"));
 
 #[no_mangle]
-fn main(multiboot_magic: u32, multiboot_info: u32) -> ! {
+extern "C" fn main(multiboot_magic: u32, multiboot_info: u32) -> ! {
     if multiboot_magic != multiboot::MULTIBOOT_BOOTLOADER_MAGIC {
-        halt();
+        loop {
+            hint::spin_loop();
+        }
     }
     let multiboot_info = unsafe {
         &*((multiboot_info as usize + (&mm::KERNEL_VMA as *const u8 as usize))
             as *const multiboot::multiboot_info)
     };
     if multiboot_info.flags & multiboot::MULTIBOOT_INFO_MEM_MAP == 0 {
-        halt();
+        loop {
+            hint::spin_loop();
+        }
     }
 
-    io::int::init();
     mm::init_virt_mem();
     mm::init_phys_mem_bare();
     mm::init_phys_mem_e820(unsafe {
@@ -58,30 +61,21 @@ fn main(multiboot_magic: u32, multiboot_info: u32) -> ! {
             multiboot_info.mmap_length as usize / size_of::<multiboot::multiboot_mmap_entry>(),
         )
     });
-
     tty::init_logging();
 
-    info!("Meerkat Operating System {}", env!("CARGO_PKG_VERSION"));
-
-    sm::init_and_run();
-
-    halt();
+    io::int::init();
+    ex::run();
 }
 
 #[no_mangle]
-fn main_ap() -> ! {
-    halt()
+extern "C" fn main_ap() {
+    ex::run();
 }
 
 #[panic_handler]
 fn panic(info: &panic::PanicInfo) -> ! {
     error!("{}", info.message());
 
-    halt();
-}
-
-#[inline(always)]
-fn halt() -> ! {
     loop {
         hint::spin_loop();
     }

@@ -14,11 +14,12 @@
 
 mod pg;
 mod pm;
-mod sm;
 mod vm;
 
 pub use pm::*;
 pub use vm::*;
+
+pub mod sm;
 
 use core::{cell, mem, ptr};
 

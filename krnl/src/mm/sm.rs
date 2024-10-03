@@ -12,15 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use core::mem;
+use core::{arch, mem, ptr};
 
+const DESCRIPTOR_NULL: usize = 0;
+const DESCRIPTOR_KCODE: usize = 1;
+const DESCRIPTOR_KDATA: usize = 2;
+const DESCRIPTOR_UCODE: usize = 3;
+const DESCRIPTOR_UDATA: usize = 4;
+const DESCRIPTOR_TSS: usize = 5;
 #[cfg(target_arch = "x86")]
-const DESCRIPTORS: usize = 6;
+const DESCRIPTOR_KERNEL_GS: usize = 6;
 #[cfg(target_arch = "x86_64")]
-const DESCRIPTORS: usize = 7;
+const DESCRIPTOR_TSS64: usize = 6;
 
 #[no_mangle]
-static DESCRIPTOR_TABLE: [Descriptor; DESCRIPTORS] = [
+static mut DESCRIPTOR_TABLE: [Descriptor; 7] = [
     // NULL
     Descriptor::zeroed(),
     // KCODE
@@ -77,7 +83,7 @@ static DESCRIPTOR_TABLE: [Descriptor; DESCRIPTORS] = [
     ),
     // TSS
     Descriptor::zeroed(),
-    #[cfg(target_arch = "x86_64")]
+    // TSS64 / KERNEL_GS
     Descriptor::zeroed(),
 ];
 
@@ -138,12 +144,10 @@ bitflags::bitflags! {
     }
 }
 
-#[used]
-static TASK_STATE_SEGMENT: TaskStateSegment = TaskStateSegment::zeroed();
-
 #[cfg(target_arch = "x86")]
 #[repr(C)]
-struct TaskStateSegment {
+#[derive(Default)]
+pub struct TaskStateSegment {
     link: u16,
     _reserved_0: u16,
     esp0: u32,
@@ -186,7 +190,8 @@ struct TaskStateSegment {
 
 #[cfg(target_arch = "x86_64")]
 #[repr(C, packed(4))]
-struct TaskStateSegment {
+#[derive(Default)]
+pub struct TaskStateSegment {
     _reserved_0: u32,
     privilege_stack_table: [u64; 3],
     _reserved_1: u64,
@@ -197,7 +202,54 @@ struct TaskStateSegment {
 }
 
 impl TaskStateSegment {
-    const fn zeroed() -> Self {
-        unsafe { mem::MaybeUninit::zeroed().assume_init() }
+    pub fn set(&self) {
+        let base = ptr::addr_of!(self) as usize;
+        let limit = size_of_val(self);
+        unsafe {
+            DESCRIPTOR_TABLE[DESCRIPTOR_TSS] = Descriptor::new(
+                base as u32,
+                limit as u32,
+                DescriptorAccess::A
+                    .union(DescriptorAccess::E)
+                    .union(DescriptorAccess::P),
+                0,
+                DescriptorFlags::empty(),
+            );
+        }
+        #[cfg(target_arch = "x86_64")]
+        unsafe {
+            DESCRIPTOR_TABLE[DESCRIPTOR_TSS64].limit_0_15 = (tss_addr >> 32) as u16;
+            DESCRIPTOR_TABLE[DESCRIPTOR_TSS64].base_0_15 = (tss_addr >> 48) as u16;
+        }
+        unsafe {
+            arch::asm!("ltr {0:x}", in(reg) DESCRIPTOR_TSS << 3, options(nostack, preserves_flags))
+        }
+    }
+}
+
+pub struct GS;
+
+impl GS {
+    #[cfg(target_arch = "x86")]
+    pub fn set(base: usize, limit: usize) {
+        unsafe {
+            DESCRIPTOR_TABLE[DESCRIPTOR_KERNEL_GS] = Descriptor::new(
+                base as u32,
+                limit as u32,
+                DescriptorAccess::A
+                    .union(DescriptorAccess::RW)
+                    .union(DescriptorAccess::E)
+                    .union(DescriptorAccess::S)
+                    .union(DescriptorAccess::P),
+                0,
+                DescriptorFlags::DB.union(DescriptorFlags::G),
+            );
+            arch::asm!("mov gs, {0:x}", in(reg) DESCRIPTOR_KERNEL_GS << 3);
+        }
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    pub fn set(base: usize, limit: usize) {
+        todo!()
     }
 }

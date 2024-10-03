@@ -16,6 +16,8 @@
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // __start
+//   eax        multiboot_magic
+//   ebx        multiboot_info
 ////////////////////////////////////////////////////////////////////////////////////////////////////
     .global __start
 __start:
@@ -23,6 +25,10 @@ __start:
     mov edi, eax
     mov esi, ebx
 
+    // setup rudimentary page table
+    // 00000000 - 003FFFFF: id
+    // C0000000 - C03FFFFF: id
+    // FFC00000 - FFFFFFFF: self ref
     mov eax, offset ptl1 - 0xC0000000
     mov ecx, 0x3                      // P R/W
 1:
@@ -38,6 +44,7 @@ __start:
     mov long ptr [eax + 0xC00], offset ptl1 - 0xC0000000 + 0x3 // P R/W 300: 1
     mov cr3                   , eax
 
+    // enable paging
     mov eax, cr0
     or  eax, 0x80000000 // CR0.PG
     mov cr0, eax
@@ -64,7 +71,7 @@ __start:
     call main
 
 gdtr:
-    .short (8 * 6) - 1
+    .short (8 * 7) - 1
     .long DESCRIPTOR_TABLE
 
 
@@ -72,23 +79,25 @@ gdtr:
     .section .text
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-// __context_swap
+// context_swap
+//   esp+0x04   load
+//   esp+0x04   save
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-    .global __context_swap
-__context_swap:
+    .global context_swap
+context_swap:
     mov eax, [esp + 0x04]
     mov edx, [esp + 0x08]
-    push ebx
     push ebp
+    push ebx
     push esi
     push edi
-    mov [eax], esp
+    mov [edx], esp
 
-    mov esp, edx
+    mov esp, eax
     pop edi
     pop esi
-    pop ebp
     pop ebx
+    pop ebp
     ret
 
 

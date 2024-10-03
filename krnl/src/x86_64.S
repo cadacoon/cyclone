@@ -16,6 +16,8 @@
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // __start
+//   eax        multiboot_magic
+//   ebx        multiboot_info
 ////////////////////////////////////////////////////////////////////////////////////////////////////
     .global __start
 __start:
@@ -36,6 +38,9 @@ __start:
     mov cr4, eax
 
     // setup rudimentary page table
+    // 0000000000000000 - 00000000001FFFFF: id
+    // FFFFFFFF80000000 - FFFFFFFF801FFFFF: id
+    // FFFFFF0000000000 - FFFFFF7FBFDFEFFF: self ref
     mov eax, offset ptl1 - 0xFFFFFFFF80000000
     mov ecx, 0x3                              // P R/W
 1:
@@ -84,8 +89,6 @@ __start:
     mov rax, offset stack_top
     mov rsp, rax
     mov rbp, rax
-    push rsi
-    push rdi
     call main
 
 gdtr_32:
@@ -101,25 +104,27 @@ gdtr_64:
     .section .text
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-// __context_swap
+// context_swap
+//   rdi        load
+//   rsi        save
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-    .global __context_swap
-__context_swap:
-    push rbx
+    .global context_swap
+context_swap:
     push rbp
+    push rbx
     push r12
     push r13
     push r14
     push r15
-    mov [rdi], rsp
+    mov [rsi], rsp
 
-    mov rsp, rsi
+    mov rsp, rdi
     pop r15
     pop r14
     pop r13
     pop r12
-    pop rbp
     pop rbx
+    pop rbp
     ret
 
 

@@ -14,7 +14,7 @@
 
 use core::{arch, mem, ptr};
 
-use crate::sm;
+use crate::ex;
 
 use super::Port;
 
@@ -155,8 +155,6 @@ macro_rules! ivt {
         }
 
         $(extern "x86-interrupt" fn $name(_stack_frame: StackFrame) {
-            tracing::trace!($description);
-
             $function
         })*
     };
@@ -197,10 +195,8 @@ ivt!(
     0x1F exc_31 "Exception 31" {},
     0x20 irq_00 "IRQ 0" {
         PIC.eoi(0);
-        unsafe {
-            arch::asm!("sti");
-        }
-        unsafe { &mut *sm::SCHED.get() }.as_mut().unwrap().r#yield();
+
+        unsafe { ex::Scheduler::get() }.enter(true);
     },
     0x21 irq_01 "IRQ 1" {
         PIC.eoi(1);

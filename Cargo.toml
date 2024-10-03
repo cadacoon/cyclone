@@ -4,6 +4,9 @@ members = [
     "krnl",
     #"lib/acpica",
     "lib/multiboot",
+    "drv/ide",
+    "drv/pci",
+    "srv/fs/fat",
 ]
 
 [profile.dev]

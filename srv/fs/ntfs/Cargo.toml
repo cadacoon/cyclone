@@ -1,5 +1,5 @@
 [package]
-name = "srv_fs_tmpfs"
+name = "srv_fs_ntfs"
 version = "0.1.0"
 authors = ["Kevin Ludwig <iam@valaphee.com>"]
 edition = "2021"
