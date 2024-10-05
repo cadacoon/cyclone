@@ -1,6 +1,6 @@
-use core::{marker, ops};
+use core::{arch, marker, ops};
 
-pub const BYTES_PER_PAGE: usize = 4096;
+pub const BYTES_PER_PAGE: usize = size_of::<PageTable<Level1>>();
 
 #[cfg(target_arch = "x86")]
 pub const PAGES_PER_TABLE: usize = 1024;
@@ -21,8 +21,14 @@ pub const PAGE_TABLE: *mut PageTable<Level4> = 0o177_777_776_776_776_776_0000 as
 pub struct Page(pub usize);
 
 impl Page {
-    pub const fn addr(&self) -> *mut u8 {
-        (self.0 * size_of::<PageTable<Level1>>()) as *mut u8
+    #[cfg(target_arch = "x86")]
+    pub const fn ptr(&self) -> *mut () {
+        (self.0 * BYTES_PER_PAGE) as *mut ()
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    pub const fn ptr(&self) -> *mut () {
+        (((self.0 * BYTES_PER_PAGE) << 16) as i64 >> 16) as *mut ()
     }
 }
 
@@ -64,9 +70,9 @@ where
 
         let addr = self as *mut _ as usize;
         #[cfg(target_arch = "x86")]
-        let next_addr = addr << 10 | L::index(page) << 12;
+        let next_addr = Page(((addr << 10) >> 12) | L::index(page)).ptr();
         #[cfg(target_arch = "x86_64")]
-        let next_addr = { (((addr << 9 | L::index(page) << 12) << 16) as i64 >> 16) as usize };
+        let next_addr = Page(((addr << 9) >> 12) | L::index(page)).ptr();
         Some(unsafe { &mut *(next_addr as *mut PageTable<L::NextLevel>) })
     }
 

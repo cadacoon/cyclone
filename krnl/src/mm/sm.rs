@@ -21,7 +21,7 @@ const DESCRIPTOR_UCODE: usize = 3;
 const DESCRIPTOR_UDATA: usize = 4;
 const DESCRIPTOR_TSS: usize = 5;
 #[cfg(target_arch = "x86")]
-const DESCRIPTOR_KERNEL_GS: usize = 6;
+const DESCRIPTOR_GS: usize = 6;
 #[cfg(target_arch = "x86_64")]
 const DESCRIPTOR_TSS64: usize = 6;
 
@@ -218,8 +218,8 @@ impl TaskStateSegment {
         }
         #[cfg(target_arch = "x86_64")]
         unsafe {
-            DESCRIPTOR_TABLE[DESCRIPTOR_TSS64].limit_0_15 = (tss_addr >> 32) as u16;
-            DESCRIPTOR_TABLE[DESCRIPTOR_TSS64].base_0_15 = (tss_addr >> 48) as u16;
+            DESCRIPTOR_TABLE[DESCRIPTOR_TSS64].limit_0_15 = (base >> 32) as u16;
+            DESCRIPTOR_TABLE[DESCRIPTOR_TSS64].base_0_15 = (base >> 48) as u16;
         }
         unsafe {
             arch::asm!("ltr {0:x}", in(reg) DESCRIPTOR_TSS << 3, options(nostack, preserves_flags))
@@ -233,7 +233,7 @@ impl GS {
     #[cfg(target_arch = "x86")]
     pub fn set(base: usize, limit: usize) {
         unsafe {
-            DESCRIPTOR_TABLE[DESCRIPTOR_KERNEL_GS] = Descriptor::new(
+            DESCRIPTOR_TABLE[DESCRIPTOR_GS] = Descriptor::new(
                 base as u32,
                 limit as u32,
                 DescriptorAccess::A
@@ -244,12 +244,19 @@ impl GS {
                 0,
                 DescriptorFlags::DB.union(DescriptorFlags::G),
             );
-            arch::asm!("mov gs, {0:x}", in(reg) DESCRIPTOR_KERNEL_GS << 3);
+            arch::asm!("mov gs, {0:x}", in(reg) DESCRIPTOR_GS << 3);
         }
     }
 
     #[cfg(target_arch = "x86_64")]
-    pub fn set(base: usize, limit: usize) {
-        todo!()
+    pub fn set(base: usize, _limit: usize) {
+        unsafe {
+            arch::asm!(
+                "wrmsr",
+                in("ecx") 0xC0000101u32,
+                in("eax") base as u32,
+                in("edx") (base >> 32) as u32,
+            );
+        }
     }
 }

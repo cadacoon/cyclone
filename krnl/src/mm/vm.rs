@@ -16,7 +16,7 @@ use core::{alloc, ptr};
 
 use super::{
     pg::{Page, BYTES_PER_PAGE, PAGES_PER_TABLE, PAGES_TOTAL, PAGE_TABLE},
-    PHYS_MEM,
+    KERNEL_VMA, PHYS_MEM,
 };
 
 #[global_allocator]
@@ -126,8 +126,11 @@ impl VirtualMemory {
 unsafe impl alloc::GlobalAlloc for VirtualMemory {
     unsafe fn alloc(&self, layout: alloc::Layout) -> *mut u8 {
         let pages = layout.size().div_ceil(BYTES_PER_PAGE);
-        self.allocate(Page(1), pages)
-            .map_or(ptr::null_mut(), |page_start| page_start.addr())
+        self.allocate(
+            Page(((&KERNEL_VMA as *const u8 as usize) / BYTES_PER_PAGE) & PAGES_TOTAL),
+            pages,
+        )
+        .map_or(ptr::null_mut(), |page_start| page_start.ptr() as *mut u8)
     }
 
     unsafe fn dealloc(&self, virt_addr: *mut u8, layout: alloc::Layout) {

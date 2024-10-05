@@ -63,7 +63,6 @@ impl Scheduler {
             if let Some(work) = self.work.take() {
                 self.work_queue.push_back(work);
                 unsafe {
-                    arch::asm!("sti");
                     context_swap(
                         self.stack_ptr,
                         &mut self.work_queue.back_mut().unwrap_unchecked().stack_ptr,
@@ -77,7 +76,10 @@ impl Scheduler {
                 unsafe {
                     arch::asm!("sti");
                 }
-                (work.method)(work.method_arg);
+                (work.function)(work.function_arg);
+                unsafe {
+                    arch::asm!("cli");
+                }
                 self.work = None;
                 unsafe {
                     context_swap(self.stack_ptr, &mut ptr::null_mut());
@@ -98,8 +100,8 @@ pub struct Thread {
     stack: Box<[u8]>,
     stack_ptr: *mut u8,
 
-    method: fn(usize) -> (),
-    method_arg: usize,
+    function: fn(usize) -> (),
+    function_arg: usize,
 }
 
 impl Thread {
@@ -122,8 +124,8 @@ impl Thread {
         Self {
             stack,
             stack_ptr,
-            method,
-            method_arg,
+            function: method,
+            function_arg: method_arg,
         }
     }
 }
@@ -158,9 +160,8 @@ fn entry_point_thread() -> ! {
 }
 
 fn test_method(arg: usize) {
-    loop {
-        info!("Called {}", arg);
-        unsafe { arch::asm!("hlt") };
+    for n in 0..arg * 1_000_000 {
+        info!("Called {} {}", arg, n);
     }
 }
 
