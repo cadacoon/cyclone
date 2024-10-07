@@ -72,17 +72,24 @@ dependencies = [
 [[package]]
 name = "drv_fs"
 version = "0.1.0"
+dependencies = [
+ "log",
+]
 
 [[package]]
 name = "drv_fs_fat"
 version = "0.1.0"
+dependencies = [
+ "log",
+]
 
 [[package]]
 name = "drv_pci"
 version = "0.1.0"
 dependencies = [
  "bitflags",
- "tracing",
+ "log",
+ "pio",
 ]
 
 [[package]]
@@ -92,7 +99,7 @@ dependencies = [
  "bitflags",
  "drv_fs",
  "drv_pci",
- "tracing",
+ "log",
 ]
 
 [[package]]
@@ -101,7 +108,7 @@ version = "0.1.0"
 dependencies = [
  "bitflags",
  "drv_pci",
- "tracing",
+ "log",
 ]
 
 [[package]]
@@ -131,10 +138,10 @@ version = "0.1.0"
 dependencies = [
  "bindgen",
  "bitflags",
+ "log",
  "multiboot",
+ "pio",
  "spin",
- "tracing",
- "volatile",
 ]
 
 [[package]]
@@ -197,12 +204,6 @@ dependencies = [
  "memchr",
  "minimal-lexical",
 ]
-
-[[package]]
-name = "pin-project-lite"
-version = "0.2.14"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bda66fc9667c18cb2758a2ac84d1167245054bcf85d5d1aaa6923f45801bdd02"
 
 [[package]]
 name = "pio"
@@ -299,7 +300,7 @@ dependencies = [
 name = "svc_vfs"
 version = "0.1.0"
 dependencies = [
- "tracing",
+ "log",
 ]
 
 [[package]]
@@ -312,22 +313,6 @@ dependencies = [
  "quote",
  "unicode-ident",
 ]
-
-[[package]]
-name = "tracing"
-version = "0.1.40"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c3523ab5a71916ccf420eebdf5521fcef02141234bbc0b8a49f2fdc4544364ef"
-dependencies = [
- "pin-project-lite",
- "tracing-core",
-]
-
-[[package]]
-name = "tracing-core"
-version = "0.1.32"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c06d3da6113f116aaee68e4d601191614c9053067f9ab7f6edbcb161237daa54"
 
 [[package]]
 name = "unicode-ident"

@@ -7,4 +7,4 @@ description = "Virtual file system service for the Meerkat operating system."
 license = "Apache-2.0"
 
 [dependencies]
-tracing = { workspace = true }
+log = { workspace = true }

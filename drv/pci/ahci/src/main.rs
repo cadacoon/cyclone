@@ -210,11 +210,31 @@ struct HBAPort {
     /// Signature
     sig: u32,
     /// Serial ATA Status
-    ssts: u32,
+    /// 00-03 Device Detection
+    /// 04-07 Current Interface Speed
+    ssts_detspd: u8,
+    /// Serial ATA Status
+    /// 08-11 Interface Power Management
+    ssts_ipm: u8,
+    /// Serial ATA Status: Reserved
+    _ssts_rsvd: u16,
     /// Serial ATA Control
-    sctl: u32,
-    /// Serial ATA Error
-    serr: u32,
+    /// 00-03 Device Detection
+    /// 04-07 Current Interface Speed
+    sctl_detspd: u8,
+    /// Serial ATA Control
+    /// 08-11 Interface Power Management Transitions Allowed
+    /// 12-15 Select Power Management
+    sctl_ipmspm: u8,
+    /// Serial ATA Control
+    /// 16-19 Port Multiplier Port
+    sctl_pmp: u8,
+    /// Serial ATA Control: Reserved
+    _sctl_rsvd: u8,
+    /// Serial ATA Error: Error
+    serr_err: HBAPortSerialATAError,
+    /// Serial ATA Error: Diagnostics
+    serr_diag: HBAPortSerialATAErrorDiagnostics,
     /// Serial ATA Active
     sact: u32,
     /// Command Issue
@@ -315,6 +335,46 @@ bitflags! {
         /// Interface Communication Control
         const ICC = ((1 << 4) - 1) << 28;
     }
+
+    struct HBAPortSerialATAError: u16 {
+        /// Recovered Data Integrity Error
+        const I = 1 << 0;
+        /// Recovered Communications Error
+        const M = 1 << 1;
+        /// Transient Data Integrity Error
+        const T = 1 << 8;
+        /// Persistent Communication or Data Integrity Errror
+        const C = 1 << 9;
+        /// Protocol Error
+        const P = 1 << 10;
+        /// Internal Error
+        const E = 1 << 11;
+    }
+
+    struct HBAPortSerialATAErrorDiagnostics: u16 {
+        /// PhyRdy Change
+        const N = 1 << 0;
+        /// Phy Internal Error
+        const I = 1 << 1;
+        /// Comm Wake
+        const W = 1 << 2;
+        /// 10B to 8B Decode Error
+        const B = 1 << 3;
+        /// Disparity Error
+        const D = 1 << 4;
+        /// CRC Error
+        const C = 1 << 5;
+        /// Handshake Error
+        const H = 1 << 6;
+        /// Link Sequence Error
+        const S = 1 << 7;
+        /// Transport State Transition Error
+        const T = 1 << 8;
+        /// Unknown FIS Type
+        const F = 1 << 9;
+        /// Exchange
+        const X = 1 << 10;
+    }
 }
 
 #[repr(C, align(1024))]
@@ -390,33 +450,6 @@ struct ReceivedFIS {
 }
 
 #[repr(C)]
-struct H2DRegisterFIS {
-    fis_type: u8,
-    flags: u8,
-    command: u8,
-    features_0_7: u8,
-
-    lba_0_7: u8,
-    lba_8_15: u8,
-    lba_16_32: u8,
-    device: u8,
-
-    lba_24_31: u8,
-    lba_32_39: u8,
-    lba_40_47: u8,
-    features_8_15: u8,
-
-    count_0_7: u8,
-    count_8_15: u8,
-    icc: u8,
-    control: u8,
-
-    auxiliary_0_7: u8,
-    auxiliary_8_15: u8,
-    _reserved: [u8; 2],
-}
-
-#[repr(C)]
 struct DMASetupFIS {
     fis_type: u8,
     flags: u8,
@@ -454,6 +487,33 @@ struct PIOSetupFIS {
 
     transfer_count: u16,
     _reserved_2: [u8; 2],
+}
+
+#[repr(C)]
+struct H2DRegisterFIS {
+    fis_type: u8,
+    flags: u8,
+    command: u8,
+    features_0_7: u8,
+
+    lba_0_7: u8,
+    lba_8_15: u8,
+    lba_16_32: u8,
+    device: u8,
+
+    lba_24_31: u8,
+    lba_32_39: u8,
+    lba_40_47: u8,
+    features_8_15: u8,
+
+    count_0_7: u8,
+    count_8_15: u8,
+    icc: u8,
+    control: u8,
+
+    auxiliary_0_7: u8,
+    auxiliary_8_15: u8,
+    _reserved: [u8; 2],
 }
 
 #[repr(C)]

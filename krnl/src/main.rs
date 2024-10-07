@@ -19,7 +19,7 @@
 
 use core::{arch, hint, panic, slice};
 
-use tracing::error;
+use log::error;
 
 #[macro_use]
 extern crate alloc;

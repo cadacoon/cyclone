@@ -7,12 +7,11 @@ description = "Meerkat operating system kernel"
 license = "Apache-2.0"
 
 [dependencies]
-bitflags = "2.6"
+log = { workspace = true }
 
+pio = { workspace = true }
 spin = "0.9"
-volatile = "0.6"
-
-tracing = { version = "0.1", default-features = false }
+bitflags = { workspace = true }
 
 #acpica = { path = "../lib/acpica" }
 multiboot = { path = "../lib/multiboot" }

@@ -16,7 +16,7 @@ use core::{arch, mem, ptr};
 
 use crate::ex;
 
-use super::Port;
+use pio::Port;
 
 static mut DESCRIPTOR_TABLE: [Descriptor; 32 + 16] = [Descriptor::zeroed(); 32 + 16];
 
@@ -161,38 +161,102 @@ macro_rules! ivt {
 }
 
 ivt!(
-    0x00 exc_de "Division Error" {},
-    0x01 exc_db "Debug" {},
-    0x02 exc_02 "Exception 2" {},
-    0x03 exc_bp "Breakpoint" {},
-    0x04 exc_of "Overflow" {},
-    0x05 exc_br "Bound Range Exceeded" {},
-    0x06 exc_ud "Invalid Opcode" {},
-    0x07 exc_nm "Device Not Available" {},
-    0x08 exc_df "Double Fault" {},
-    0x09 exc_09 "Exception 9" {},
-    0x0A exc_ts "Invalid TSS" {},
-    0x0B exc_np "Segment Not Present" {},
-    0x0C exc_ss "Stack-Segment Fault" {},
-    0x0D exc_gp "General Protection Fault" {},
-    0x0E exc_pf "Page Fault" {},
-    0x0F exc_15 "Exception 15" {},
-    0x10 exc_mf "x87 Floating-Point Exception" {},
-    0x11 exc_ac "Alignment Check" {},
-    0x12 exc_mc "Machine Check" {},
-    0x13 exc_xf "SIMD Floating-Point Exception" {},
-    0x14 exc_ve "Virtualization Exception" {},
-    0x15 exc_cp "Control Protection Exception" {},
-    0x16 exc_22 "Exception 22" {},
-    0x17 exc_23 "Exception 23" {},
-    0x18 exc_24 "Exception 24" {},
-    0x19 exc_25 "Exception 25" {},
-    0x1A exc_26 "Exception 26" {},
-    0x1B exc_27 "Exception 27" {},
-    0x1C exc_hv "Hypervisor Injection Exception" {},
-    0x1D exc_vc "VMM Communication Exception" {},
-    0x1E exc_sx "Security Exception" {},
-    0x1F exc_31 "Exception 31" {},
+    0x00 exc_de "Division Error" {
+        loop {}
+    },
+    0x01 exc_db "Debug" {
+        loop {}
+    },
+    0x02 exc_02 "Exception 2" {
+        loop {}
+    },
+    0x03 exc_bp "Breakpoint" {
+        loop {}
+    },
+    0x04 exc_of "Overflow" {
+        loop {}
+    },
+    0x05 exc_br "Bound Range Exceeded" {
+        loop {}
+    },
+    0x06 exc_ud "Invalid Opcode" {
+        loop {}
+    },
+    0x07 exc_nm "Device Not Available" {
+        loop {}
+    },
+    0x08 exc_df "Double Fault" {
+        loop {}
+    },
+    0x09 exc_09 "Exception 9" {
+        loop {}
+    },
+    0x0A exc_ts "Invalid TSS" {
+        loop {}
+    },
+    0x0B exc_np "Segment Not Present" {
+        loop {}
+    },
+    0x0C exc_ss "Stack-Segment Fault" {
+        loop {}
+    },
+    0x0D exc_gp "General Protection Fault" {
+        loop {}
+    },
+    0x0E exc_pf "Page Fault" {
+        loop {}
+    },
+    0x0F exc_15 "Exception 15" {
+        loop {}
+    },
+    0x10 exc_mf "x87 Floating-Point Exception" {
+        loop {}
+    },
+    0x11 exc_ac "Alignment Check" {
+        loop {}
+    },
+    0x12 exc_mc "Machine Check" {
+        loop {}
+    },
+    0x13 exc_xf "SIMD Floating-Point Exception" {
+        loop {}
+    },
+    0x14 exc_ve "Virtualization Exception" {
+        loop {}
+    },
+    0x15 exc_cp "Control Protection Exception" {
+        loop {}
+    },
+    0x16 exc_22 "Exception 22" {
+        loop {}
+    },
+    0x17 exc_23 "Exception 23" {
+        loop {}
+    },
+    0x18 exc_24 "Exception 24" {
+        loop {}
+    },
+    0x19 exc_25 "Exception 25" {
+        loop {}
+    },
+    0x1A exc_26 "Exception 26" {
+        loop {}
+    },
+    0x1B exc_27 "Exception 27" {
+        loop {}
+    },
+    0x1C exc_hv "Hypervisor Injection Exception" {
+        loop {}
+    },
+    0x1D exc_vc "VMM Communication Exception" {
+        loop {}
+    },
+    0x1E exc_sx "Security Exception" {
+        loop {}
+    },
+    0x1F exc_31 "Exception 31" {
+        loop {}
+    },
     0x20 irq_00 "IRQ 0" {
         PIC.eoi(0);
 

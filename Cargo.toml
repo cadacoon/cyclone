@@ -17,7 +17,9 @@ members = [
 ]
 
 [workspace.dependencies]
-tracing = { version = "0.1", default-features = false }
+log = "0.4"
+
+pio = { path = "lib/pio" }
 bitflags = "2.6"
 
 drv_fs = { path = "drv/fs" }

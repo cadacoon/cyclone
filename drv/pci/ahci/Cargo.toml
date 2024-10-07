@@ -7,7 +7,8 @@ description = "AHCI driver for the Meerkat operating system."
 license = "Apache-2.0"
 
 [dependencies]
-tracing = { workspace = true }
+log = { workspace = true }
+
 bitflags = { workspace = true }
 
 drv_fs = { workspace = true }

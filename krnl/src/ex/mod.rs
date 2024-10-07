@@ -14,13 +14,7 @@
 
 use core::{arch, hint, ptr};
 
-use alloc::{
-    boxed::Box,
-    collections::{btree_map::BTreeMap, vec_deque::VecDeque},
-    string::String,
-    vec::Vec,
-};
-use tracing::info;
+use alloc::{boxed::Box, collections::vec_deque::VecDeque};
 
 use crate::mm;
 
@@ -152,22 +146,12 @@ fn entry_point_scheduler() -> ! {
     scheduler.tss.set();
     mm::sm::GS::set(ptr::addr_of!(scheduler) as usize, size_of::<Scheduler>());
 
-    scheduler.spawn(test_method, 0);
-    scheduler.spawn(test_method, 1);
-    scheduler.spawn(test_method, 2);
-    scheduler.spawn(test_method, 3);
     scheduler.run()
 }
 
 fn entry_point_thread() -> ! {
     unsafe { Scheduler::get() }.enter(false);
     unsafe { hint::unreachable_unchecked() }
-}
-
-fn test_method(arg: usize) {
-    for n in 0..(arg + 1) * 300 {
-        info!("Called {} {}", arg, n);
-    }
 }
 
 extern "C" {

@@ -89,7 +89,7 @@ __start:
     mov rax, offset stack_top
     mov rsp, rax
     mov rbp, rax
-    call main
+    jmp main
 
 gdtr_32:
     .short (8 * 7) - 1

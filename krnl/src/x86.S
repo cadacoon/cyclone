@@ -68,7 +68,7 @@ __start:
     mov ebp, eax
     push esi
     push edi
-    call main
+    jmp main
 
 gdtr:
     .short (8 * 7) - 1

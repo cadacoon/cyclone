@@ -1,8 +1,6 @@
-use core::{
-    arch,
-    fmt::{self, Write},
-};
+use core::fmt::{self, Write};
 
+use alloc::boxed::Box;
 use spin::Mutex;
 
 use crate::mm;
@@ -72,36 +70,22 @@ impl Default for TtySubscriber {
     }
 }
 
-impl tracing::Subscriber for TtySubscriber {
-    fn enabled(&self, _metadata: &tracing::Metadata<'_>) -> bool {
+impl log::Log for TtySubscriber {
+    fn enabled(&self, _metadata: &log::Metadata) -> bool {
         true
     }
 
-    fn new_span(&self, _span: &tracing::span::Attributes<'_>) -> tracing::span::Id {
-        tracing::span::Id::from_u64(1)
+    fn log(&self, record: &log::Record) {
+        unsafe {
+            self.0.force_unlock();
+        }
+        let _ = writeln!(self.0.lock(), "{}", record.args());
     }
 
-    fn record(&self, _span: &tracing::span::Id, _values: &tracing::span::Record<'_>) {}
-
-    fn record_follows_from(&self, _span: &tracing::span::Id, _follows: &tracing::span::Id) {}
-
-    fn event(&self, event: &tracing::Event<'_>) {
-        event.record(&mut TtyFieldVisitor(&mut self.0.lock()));
-    }
-
-    fn enter(&self, _span: &tracing::span::Id) {}
-
-    fn exit(&self, _span: &tracing::span::Id) {}
-}
-
-struct TtyFieldVisitor<'tty>(&'tty mut Tty);
-
-impl<'tty> tracing::field::Visit for TtyFieldVisitor<'tty> {
-    fn record_debug(&mut self, _field: &tracing::field::Field, value: &dyn fmt::Debug) {
-        let _ = writeln!(self.0, "{:#?}", value);
-    }
+    fn flush(&self) {}
 }
 
 pub fn init_logging() {
-    let _ = tracing::subscriber::set_global_default(TtySubscriber::default());
+    log::set_max_level(log::LevelFilter::Debug);
+    let _ = log::set_logger(Box::leak(Box::new(TtySubscriber::default())));
 }
