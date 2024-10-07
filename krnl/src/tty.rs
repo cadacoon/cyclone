@@ -1,4 +1,7 @@
-use core::fmt::{self, Write};
+use core::{
+    arch,
+    fmt::{self, Write},
+};
 
 use spin::Mutex;
 

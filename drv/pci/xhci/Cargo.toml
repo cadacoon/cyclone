@@ -1,11 +1,13 @@
 [package]
-name = "drv_pci"
+name = "drv_pci_xhci"
 version = "0.1.0"
 authors = ["Kevin Ludwig <iam@valaphee.com>"]
 edition = "2021"
-description = "PCI driver for the Meerkat operating system."
+description = "xHCI driver for the Meerkat operating system."
 license = "Apache-2.0"
 
 [dependencies]
 tracing = { workspace = true }
 bitflags = { workspace = true }
+
+drv_pci = { workspace = true }

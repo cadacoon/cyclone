@@ -14,7 +14,12 @@
 
 use core::{arch, hint, ptr};
 
-use alloc::{boxed::Box, collections::vec_deque::VecDeque};
+use alloc::{
+    boxed::Box,
+    collections::{btree_map::BTreeMap, vec_deque::VecDeque},
+    string::String,
+    vec::Vec,
+};
 use tracing::info;
 
 use crate::mm;
@@ -23,8 +28,8 @@ pub struct Scheduler {
     tss: Box<mm::sm::TaskStateSegment>,
 
     stack_ptr: *mut u8,
-    work_queue: VecDeque<Thread>,
-    work: Option<Thread>,
+    work_queue: VecDeque<Schedulable>,
+    work: Option<Schedulable>,
 }
 
 impl Default for Scheduler {
@@ -92,11 +97,11 @@ impl Scheduler {
 
     pub fn spawn(&mut self, method: fn(usize) -> (), method_arg: usize) {
         self.work_queue
-            .push_back(Thread::new(entry_point_thread, method, method_arg));
+            .push_back(Schedulable::new(entry_point_thread, method, method_arg));
     }
 }
 
-pub struct Thread {
+pub struct Schedulable {
     stack: Box<[u8]>,
     stack_ptr: *mut u8,
 
@@ -104,8 +109,8 @@ pub struct Thread {
     function_arg: usize,
 }
 
-impl Thread {
-    fn new(entry_point: fn() -> !, method: fn(usize) -> (), method_arg: usize) -> Self {
+impl Schedulable {
+    fn new(entry_point: fn() -> !, function: fn(usize) -> (), function_arg: usize) -> Self {
         let mut stack = unsafe { Box::<[u8; 16 * 1024]>::new_uninit().assume_init() };
         let stack_ptr = unsafe {
             let mut stack_ptr = stack.as_mut_ptr() as *mut usize;
@@ -124,8 +129,8 @@ impl Thread {
         Self {
             stack,
             stack_ptr,
-            function: method,
-            function_arg: method_arg,
+            function,
+            function_arg,
         }
     }
 }
@@ -135,7 +140,7 @@ pub fn run() -> ! {
 
     unsafe {
         context_swap(
-            Thread::new(entry_point_scheduler, dummy, 0).stack_ptr,
+            Schedulable::new(entry_point_scheduler, dummy, 0).stack_ptr,
             &mut ptr::null_mut(),
         );
         hint::unreachable_unchecked()
@@ -160,7 +165,7 @@ fn entry_point_thread() -> ! {
 }
 
 fn test_method(arg: usize) {
-    for n in 0..arg * 1_000_000 {
+    for n in 0..(arg + 1) * 300 {
         info!("Called {} {}", arg, n);
     }
 }

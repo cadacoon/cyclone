@@ -2,12 +2,26 @@
 resolver = "2"
 members = [
     "krnl",
+
     #"lib/acpica",
     "lib/multiboot",
-    "drv/ide",
+    "lib/pio",
+
+    "drv/fs",
+    "drv/fs/fat",
     "drv/pci",
-    "srv/fs/fat",
+    "drv/pci/ahci",
+    "drv/pci/xhci",
+
+    "svc/vfs",
 ]
+
+[workspace.dependencies]
+tracing = { version = "0.1", default-features = false }
+bitflags = "2.6"
+
+drv_fs = { path = "drv/fs" }
+drv_pci = { path = "drv/pci" }
 
 [profile.dev]
 opt-level = 1

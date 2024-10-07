@@ -1,0 +1,7 @@
+[package]
+name = "pio"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+volatile = "0.6"

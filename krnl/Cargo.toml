@@ -3,6 +3,7 @@ name = "krnl"
 version = "0.1.0"
 authors = ["Kevin Ludwig <iam@valaphee.com>"]
 edition = "2021"
+description = "Meerkat operating system kernel"
 license = "Apache-2.0"
 
 [dependencies]

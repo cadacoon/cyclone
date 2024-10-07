@@ -70,12 +70,39 @@ dependencies = [
 ]
 
 [[package]]
-name = "drv_ide"
+name = "drv_fs"
+version = "0.1.0"
+
+[[package]]
+name = "drv_fs_fat"
 version = "0.1.0"
 
 [[package]]
 name = "drv_pci"
 version = "0.1.0"
+dependencies = [
+ "bitflags",
+ "tracing",
+]
+
+[[package]]
+name = "drv_pci_ahci"
+version = "0.1.0"
+dependencies = [
+ "bitflags",
+ "drv_fs",
+ "drv_pci",
+ "tracing",
+]
+
+[[package]]
+name = "drv_pci_xhci"
+version = "0.1.0"
+dependencies = [
+ "bitflags",
+ "drv_pci",
+ "tracing",
+]
 
 [[package]]
 name = "either"
@@ -178,6 +205,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bda66fc9667c18cb2758a2ac84d1167245054bcf85d5d1aaa6923f45801bdd02"
 
 [[package]]
+name = "pio"
+version = "0.1.0"
+dependencies = [
+ "volatile",
+]
+
+[[package]]
 name = "prettyplease"
 version = "0.2.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -262,8 +296,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "srv_fs_fat"
+name = "svc_vfs"
 version = "0.1.0"
+dependencies = [
+ "tracing",
+]
 
 [[package]]
 name = "syn"
