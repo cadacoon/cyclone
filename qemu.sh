@@ -1,11 +1,14 @@
 #!/bin/sh
 
-cargo build -p krnl --target krnl/x86_64-unknown-meerkat.json
+target=i386
 
-objcopy -O binary target/x86_64-unknown-meerkat/debug/krnl  target/x86_64-unknown-meerkat/debug/krnl.bin
-qemu-system-x86_64 \
+kernel=target/$target-unknown-meerkat/debug/krnl
+cargo build -p krnl --target krnl/$target-unknown-meerkat.json
+objcopy -O binary $kernel $kernel.bin
+
+qemu-system-$target \
     -m 8G -smp 4 \
-    -kernel target/x86_64-unknown-meerkat/debug/krnl.bin \
+    -kernel $kernel.bin \
     -no-reboot -no-shutdown -s -d in_asm,int \
     -drive id=disk,file=target/qemu.img,if=none \
     -device ahci,id=ahci \

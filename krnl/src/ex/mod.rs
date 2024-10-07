@@ -75,7 +75,7 @@ impl Scheduler {
                 unsafe {
                     arch::asm!("sti");
                 }
-                (work.function)(work.function_arg);
+                //(work.function)(work.function_arg);
                 unsafe {
                     arch::asm!("cli");
                 }
@@ -89,22 +89,18 @@ impl Scheduler {
         }
     }
 
-    pub fn spawn(&mut self, method: fn(usize) -> (), method_arg: usize) {
-        self.work_queue
-            .push_back(Schedulable::new(entry_point_thread, method, method_arg));
+    pub fn spawn(&mut self, method: fn() -> !) {
+        self.work_queue.push_back(Schedulable::new(method));
     }
 }
 
 pub struct Schedulable {
     stack: Box<[u8]>,
     stack_ptr: *mut u8,
-
-    function: fn(usize) -> (),
-    function_arg: usize,
 }
 
 impl Schedulable {
-    fn new(entry_point: fn() -> !, function: fn(usize) -> (), function_arg: usize) -> Self {
+    fn new(entry_point: fn() -> !) -> Self {
         let mut stack = unsafe { Box::<[u8; 16 * 1024]>::new_uninit().assume_init() };
         let stack_ptr = unsafe {
             let mut stack_ptr = stack.as_mut_ptr() as *mut usize;
@@ -120,12 +116,7 @@ impl Schedulable {
             }
             stack_ptr as *mut u8
         };
-        Self {
-            stack,
-            stack_ptr,
-            function,
-            function_arg,
-        }
+        Self { stack, stack_ptr }
     }
 }
 
@@ -133,10 +124,8 @@ pub fn run() -> ! {
     fn dummy(_: usize) {}
 
     unsafe {
-        context_swap(
-            Schedulable::new(entry_point_scheduler, dummy, 0).stack_ptr,
-            &mut ptr::null_mut(),
-        );
+        let scheduler = Schedulable::new(entry_point_scheduler);
+        context_swap(scheduler.stack_ptr, &mut ptr::null_mut());
         hint::unreachable_unchecked()
     }
 }
@@ -146,6 +135,7 @@ fn entry_point_scheduler() -> ! {
     scheduler.tss.set();
     mm::sm::GS::set(ptr::addr_of!(scheduler) as usize, size_of::<Scheduler>());
 
+    scheduler.spawn(entry_point_thread);
     scheduler.run()
 }
 

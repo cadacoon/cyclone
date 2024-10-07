@@ -76,9 +76,6 @@ impl log::Log for TtySubscriber {
     }
 
     fn log(&self, record: &log::Record) {
-        unsafe {
-            self.0.force_unlock();
-        }
         let _ = writeln!(self.0.lock(), "{}", record.args());
     }
 

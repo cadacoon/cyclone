@@ -15,6 +15,10 @@
 #![no_std]
 #![no_main]
 
+use core::{hint, panic};
+
+use drv_pci::Device;
+
 fn main(_device: Device) {}
 
 #[panic_handler]

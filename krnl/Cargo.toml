@@ -9,9 +9,10 @@ license = "Apache-2.0"
 [dependencies]
 log = { workspace = true }
 
+bitflags = { workspace = true }
+bitmap = { workspace = true }
 pio = { workspace = true }
 spin = "0.9"
-bitflags = { workspace = true }
 
 #acpica = { path = "../lib/acpica" }
 multiboot = { path = "../lib/multiboot" }

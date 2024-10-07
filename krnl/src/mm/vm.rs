@@ -15,12 +15,9 @@
 use core::{alloc, ptr};
 
 use super::{
-    pg::{Page, BYTES_PER_PAGE, PAGES_PER_TABLE, PAGES_TOTAL, PAGE_TABLE},
+    pg::{self, Page, BYTES_PER_PAGE, PAGES_PER_TABLE, PAGES_TOTAL, PAGE_TABLE},
     KERNEL_VMA, PHYS_MEM,
 };
-
-#[global_allocator]
-pub static VIRT_MEM: VirtualMemory = VirtualMemory;
 
 pub struct VirtualMemory;
 
@@ -138,4 +135,11 @@ unsafe impl alloc::GlobalAlloc for VirtualMemory {
         let pages = layout.size().div_ceil(BYTES_PER_PAGE);
         self.free(page_start, pages);
     }
+}
+
+#[global_allocator]
+pub static VIRT_MEM: VirtualMemory = VirtualMemory;
+
+pub fn init_virt_mem() {
+    (unsafe { &mut *(pg::PAGE_TABLE) })[pg::Page(0)].unmap();
 }

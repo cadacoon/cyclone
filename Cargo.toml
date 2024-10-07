@@ -4,6 +4,7 @@ members = [
     "krnl",
 
     #"lib/acpica",
+    "lib/bitmap",
     "lib/multiboot",
     "lib/pio",
 
@@ -19,14 +20,12 @@ members = [
 [workspace.dependencies]
 log = "0.4"
 
-pio = { path = "lib/pio" }
 bitflags = "2.6"
+bitmap = { path = "lib/bitmap" }
+pio = { path = "lib/pio" }
 
 drv_fs = { path = "drv/fs" }
 drv_pci = { path = "drv/pci" }
-
-[profile.dev]
-opt-level = 1
 
 [profile.release]
 strip = true

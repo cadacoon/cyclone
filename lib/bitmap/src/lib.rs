@@ -12,7 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use core::{cmp, fmt, ops};
+#![no_std]
+
+extern crate alloc;
+
+use core::{cmp, fmt, mem, ops};
 
 use alloc::boxed::Box;
 
@@ -25,16 +29,25 @@ impl Bitmap {
         Self(value)
     }
 
+    /// Updates the underlying backing of this bitmap, copies the data and
+    /// potentially shrink or grows it.
+    pub fn update(&mut self, mut value: Box<[Block]>) {
+        let copy_len = value.len().min(self.0.len());
+        value[0..copy_len].copy_from_slice(&self.0[0..copy_len]);
+        mem::swap(&mut self.0, &mut value);
+        mem::forget(value);
+    }
+
     /// Creates an iterator which returns sequences of consecutive zeros
-    pub fn consecutive_zeros(&self, fits: usize) -> ConsecutiveZeros {
-        assert!(fits > 0);
+    pub fn consecutive_zeros(&self, count: usize) -> ConsecutiveZeros {
+        assert!(count > 0);
 
         ConsecutiveZeros {
             bitmap: self,
             block_index: 0,
             block: self.0[0],
             index: 0,
-            fits,
+            count,
         }
     }
 
@@ -72,7 +85,7 @@ pub struct ConsecutiveZeros<'owner> {
     block_index: usize,
     block: Block,
     index: usize,
-    fits: usize,
+    count: usize,
 }
 
 impl<'a> Iterator for ConsecutiveZeros<'a> {
@@ -83,7 +96,7 @@ impl<'a> Iterator for ConsecutiveZeros<'a> {
             if self.block == 0 {
                 let index = self.index;
                 let next_index = (self.block_index + 1) * Block::BITS as usize;
-                if next_index - index >= self.fits {
+                if next_index - index >= self.count {
                     self.index = next_index;
                     self.block_index += 1;
                     self.block = *self.bitmap.0.get(self.block_index).unwrap_or(&0);
@@ -96,13 +109,13 @@ impl<'a> Iterator for ConsecutiveZeros<'a> {
                     + self.block.trailing_zeros() as usize;
                 self.index = next_index + 1;
                 self.block ^= self.block & self.block.wrapping_neg();
-                if next_index - index >= self.fits {
+                if next_index - index >= self.count {
                     return Some(index..next_index);
                 }
             }
             let index = self.index;
             let next_index = self.index + self.bitmap.0[self.block_index].leading_zeros() as usize;
-            if next_index - index >= self.fits {
+            if next_index - index >= self.count {
                 self.index = next_index;
                 self.block_index += 1;
                 self.block = *self.bitmap.0.get(self.block_index).unwrap_or(&0);
