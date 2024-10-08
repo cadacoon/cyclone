@@ -20,22 +20,23 @@ use ctx::Context;
 use crate::mm;
 
 mod ctx;
+mod int;
 
 pub struct Scheduler {
-    tss: Box<mm::sm::TaskStateSegment>,
-
     context: Context,
-    work_queue: VecDeque<Schedulable>,
-    work: Option<Schedulable>,
+    runnables: VecDeque<Runnable>,
+    running: Option<Runnable>,
+
+    tss: Box<mm::sm::TaskStateSegment>,
 }
 
 impl Default for Scheduler {
     fn default() -> Self {
         Self {
-            tss: Default::default(),
             context: unsafe { Context::empty() },
-            work_queue: Default::default(),
-            work: Default::default(),
+            runnables: Default::default(),
+            running: Default::default(),
+            tss: Default::default(),
         }
     }
 }
@@ -49,69 +50,58 @@ impl Scheduler {
         }
     }
 
-    pub fn run(&mut self) {
-        while let Some(thread) = self.work_queue.pop_front() {
-            self.work = Some(thread);
-            self.work.as_ref().unwrap().context.swap(&mut self.context);
+    fn scheduler_entry() -> ! {
+        let mut scheduler: Box<Self> = Box::default();
+        unsafe {
+            scheduler.tss.load();
+            mm::sm::GS::set(ptr::addr_of!(scheduler) as usize, size_of_val(&scheduler));
         }
+
+        while let Some(runnable) = scheduler.runnables.pop_front() {
+            scheduler.running = Some(runnable);
+            scheduler
+                .running
+                .as_ref()
+                .unwrap()
+                .context
+                .swap(&mut scheduler.context);
+        }
+        panic!("nothing left to do");
     }
 
-    pub fn enter(&mut self, startup: bool) {
-        let work = self.work.as_mut().unwrap();
-        if startup {
-            (work.closure.take().unwrap())();
-            self.work = None;
-            self.context.load();
-        } else {
-            self.work_queue.push_back(self.work.take().unwrap());
-            self.context
-                .swap(&mut self.work_queue.back_mut().unwrap().context);
-        }
+    fn runnable_entry() -> ! {
+        let scheduler = Scheduler::get();
+        let runnable = scheduler.running.as_mut().unwrap();
+        (runnable.closure.take().unwrap())();
+        scheduler.running = None;
+        scheduler.context.load();
     }
 
-    pub fn queue(&mut self, closure: Box<dyn FnOnce()>) {
-        self.work_queue.push_back(Schedulable::new(closure));
+    pub fn r#yield(&mut self) {
+        self.runnables.push_back(self.running.take().unwrap());
+        self.context
+            .swap(&mut self.runnables.back_mut().unwrap().context);
+    }
+
+    pub fn spawn(&mut self, closure: Box<dyn FnOnce()>) {
+        self.runnables.push_back(Runnable::new(closure));
     }
 }
 
-pub struct Schedulable {
+pub struct Runnable {
     context: Context,
     closure: Option<Box<dyn FnOnce()>>,
 }
 
-impl Schedulable {
+impl Runnable {
     fn new(closure: Box<dyn FnOnce()>) -> Self {
-        fn schedulable_entry_point() -> ! {
-            Scheduler::get().enter(true);
-            unreachable!();
-        }
-
         Self {
-            context: Context::new(schedulable_entry_point),
+            context: Context::new(Scheduler::runnable_entry),
             closure: Some(closure),
         }
     }
 }
 
 pub fn run() -> ! {
-    fn scheduler_entry_point() -> ! {
-        let mut scheduler: Box<Scheduler> = Box::default();
-        scheduler.tss.load();
-        mm::sm::GS::set(ptr::addr_of!(scheduler) as usize, size_of::<Scheduler>());
-
-        scheduler.queue(Box::new(|| {
-            Scheduler::get().queue(Box::new(|| loop {
-                log::info!("Inside the second closure");
-                Scheduler::get().enter(false);
-            }));
-            loop {
-                log::info!("Inside the closure");
-                Scheduler::get().enter(false);
-            }
-        }));
-        scheduler.run();
-        panic!("nothing left to do");
-    }
-
-    Context::new(scheduler_entry_point).load();
+    Context::new(Scheduler::scheduler_entry).load();
 }

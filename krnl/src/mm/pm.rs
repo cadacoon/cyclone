@@ -51,33 +51,21 @@ impl PhysicalMemory {
     }
 }
 
+const PHYS_MEM_SIZE: usize = 2048;
+pub static PHYS_MEM_DATA: cell::SyncUnsafeCell<[usize; PHYS_MEM_SIZE / usize::BITS as usize]> =
+    cell::SyncUnsafeCell::new([0; PHYS_MEM_SIZE / usize::BITS as usize]);
 pub static PHYS_MEM: Mutex<PhysicalMemory> = Mutex::new(PhysicalMemory::new(
     Bitmap::new(unsafe {
         mem::transmute(ptr::slice_from_raw_parts(
-            ptr::NonNull::<[usize; 0]>::dangling().as_ptr() as *const _,
-            0,
+            PHYS_MEM_DATA.get(),
+            PHYS_MEM_SIZE / usize::BITS as usize,
         ))
     }),
-    0,
+    PHYS_MEM_SIZE,
 ));
 
-const PHYS_MEM_BARE_SIZE: usize = 2048;
-
-pub fn init_phys_mem_bare() {
-    static PHYS_MEM_DATA: cell::SyncUnsafeCell<[usize; PHYS_MEM_BARE_SIZE / usize::BITS as usize]> =
-        cell::SyncUnsafeCell::new([0; PHYS_MEM_BARE_SIZE / usize::BITS as usize]);
-
-    let mut phys_mem = PHYS_MEM.lock();
-    *phys_mem = PhysicalMemory::new(
-        Bitmap::new(unsafe {
-            mem::transmute(ptr::slice_from_raw_parts(
-                PHYS_MEM_DATA.get(),
-                PHYS_MEM_BARE_SIZE / usize::BITS as usize,
-            ))
-        }),
-        PHYS_MEM_BARE_SIZE,
-    );
-    phys_mem.mark_used(0, pg::PAGES_PER_TABLE);
+pub fn init_phys_mem() {
+    PHYS_MEM.lock().mark_used(0, pg::PAGES_PER_TABLE);
 }
 
 pub fn init_phys_mem_e820(phys_mem_map: &[multiboot::multiboot_mmap_entry]) {
@@ -103,9 +91,9 @@ pub fn init_phys_mem_e820(phys_mem_map: &[multiboot::multiboot_mmap_entry]) {
         let mut frame_start = phys_mem_entry.addr / pg::BYTES_PER_PAGE as u64;
         let mut frame_end = frame_start + (phys_mem_entry.len / pg::BYTES_PER_PAGE as u64);
 
-        // already accounted for in init_phys_mem_bare
-        frame_start = frame_start.max(PHYS_MEM_BARE_SIZE as u64);
-        frame_end = frame_end.max(PHYS_MEM_BARE_SIZE as u64);
+        // already accounted for in init_phys_mem
+        frame_start = frame_start.max(PHYS_MEM_SIZE as u64);
+        frame_end = frame_end.max(PHYS_MEM_SIZE as u64);
 
         let frames = frame_end - frame_start;
         if frames == 0 {

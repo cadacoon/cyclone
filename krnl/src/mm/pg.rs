@@ -42,6 +42,7 @@ impl Page {
 
     #[cfg(target_arch = "x86_64")]
     pub const fn ptr(&self) -> *mut () {
+        // canonical addresses are 48-bit sign extended to 64-bit
         (((self.0 * BYTES_PER_PAGE) << 16) as i64 >> 16) as *mut ()
     }
 }

@@ -14,8 +14,7 @@
 
 #![no_std]
 #![no_main]
-#![feature(abi_x86_interrupt, sync_unsafe_cell, negative_impls, box_vec_non_null)]
-#![allow(dead_code)]
+#![feature(abi_x86_interrupt, naked_functions, sync_unsafe_cell)]
 
 use core::{arch, hint, panic, slice};
 
@@ -51,7 +50,7 @@ extern "C" fn main(multiboot_magic: u32, multiboot_info: u32) -> ! {
     }
 
     mm::init_virt_mem();
-    mm::init_phys_mem_bare();
+    mm::init_phys_mem();
 
     tty::init();
     mm::init_phys_mem_e820(unsafe {

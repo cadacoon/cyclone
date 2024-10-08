@@ -76,32 +76,6 @@ gdtr:
 
 
 
-    .section .text
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-// context_swap
-//   esp+0x04   load
-//   esp+0x04   save
-////////////////////////////////////////////////////////////////////////////////////////////////////
-    .global context_swap
-context_swap:
-    mov eax, [esp + 0x04]
-    mov edx, [esp + 0x08]
-    push ebp
-    push ebx
-    push esi
-    push edi
-    mov [edx], esp
-
-    mov esp, eax
-    pop edi
-    pop esi
-    pop ebx
-    pop ebp
-    ret
-
-
-
     .section .bss
 
     .align 16
