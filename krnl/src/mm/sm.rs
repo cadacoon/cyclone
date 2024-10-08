@@ -202,7 +202,7 @@ pub struct TaskStateSegment {
 }
 
 impl TaskStateSegment {
-    pub fn set(&self) {
+    pub fn load(&self) {
         let base = ptr::addr_of!(self) as usize;
         let limit = size_of_val(self);
         unsafe {

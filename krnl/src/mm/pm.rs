@@ -17,8 +17,6 @@ use core::{cell, mem, ptr};
 use bitmap::Bitmap;
 use spin::Mutex;
 
-use crate::mm::pg::PAGES_PER_TABLE;
-
 use super::pg;
 
 pub struct PhysicalMemory {
@@ -79,7 +77,7 @@ pub fn init_phys_mem_bare() {
         }),
         PHYS_MEM_BARE_SIZE,
     );
-    phys_mem.mark_used(0, PAGES_PER_TABLE);
+    phys_mem.mark_used(0, pg::PAGES_PER_TABLE);
 }
 
 pub fn init_phys_mem_e820(phys_mem_map: &[multiboot::multiboot_mmap_entry]) {

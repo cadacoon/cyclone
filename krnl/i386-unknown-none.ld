@@ -1,8 +1,8 @@
 MULTIBOOT_MAGIC = 0x1BADB002;
 MULTIBOOT_FLAGS = 0x00010003;
 
-KERNEL_LMA = 0x0000000000100000;
-KERNEL_VMA = 0xFFFFFFFF80000000;
+KERNEL_LMA = 0x00100000;
+KERNEL_VMA = 0xC0000000;
 
 ENTRY(__start)
 
@@ -50,7 +50,6 @@ SECTIONS {
     .data : AT(ADDR(.data) - KERNEL_VMA) ALIGN(CONSTANT(MAXPAGESIZE)) {
         __data_start = .;
         *(.data .data.*)
-        . = ALIGN(CONSTANT(MAXPAGESIZE));
         __data_end = .;
     }
 
@@ -58,7 +57,6 @@ SECTIONS {
         __bss_start = .;
         *(.bss .bss.*)
         *(COMMON)
-        . = ALIGN(CONSTANT(MAXPAGESIZE));
         __bss_end = .;
     }
 

@@ -25,7 +25,6 @@ use log::error;
 extern crate alloc;
 
 mod ex;
-mod io;
 mod mm;
 mod tty;
 
@@ -53,7 +52,8 @@ extern "C" fn main(multiboot_magic: u32, multiboot_info: u32) -> ! {
 
     mm::init_virt_mem();
     mm::init_phys_mem_bare();
-    tty::init_logging();
+
+    tty::init();
     mm::init_phys_mem_e820(unsafe {
         slice::from_raw_parts(
             (multiboot_info.mmap_addr as usize + (&mm::KERNEL_VMA as *const u8 as usize))
@@ -62,7 +62,6 @@ extern "C" fn main(multiboot_magic: u32, multiboot_info: u32) -> ! {
         )
     });
 
-    io::int::init();
     ex::run();
 }
 

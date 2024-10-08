@@ -2,8 +2,8 @@
 
 target=i386
 
-kernel=target/$target-unknown-meerkat/debug/krnl
-cargo build -p krnl --target krnl/$target-unknown-meerkat.json
+kernel=target/$target-unknown-none/debug/krnl
+cargo build -p krnl --target krnl/$target-unknown-none.json
 objcopy -O binary $kernel $kernel.bin
 
 qemu-system-$target \

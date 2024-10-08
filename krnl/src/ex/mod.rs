@@ -12,16 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use core::{arch, hint, ptr};
+use core::{arch, ptr};
 
 use alloc::{boxed::Box, collections::vec_deque::VecDeque};
+use ctx::Context;
 
 use crate::mm;
+
+mod ctx;
 
 pub struct Scheduler {
     tss: Box<mm::sm::TaskStateSegment>,
 
-    stack_ptr: *mut u8,
+    context: Context,
     work_queue: VecDeque<Schedulable>,
     work: Option<Schedulable>,
 }
@@ -30,7 +33,7 @@ impl Default for Scheduler {
     fn default() -> Self {
         Self {
             tss: Default::default(),
-            stack_ptr: ptr::null_mut(),
+            context: unsafe { Context::empty() },
             work_queue: Default::default(),
             work: Default::default(),
         }
@@ -38,112 +41,77 @@ impl Default for Scheduler {
 }
 
 impl Scheduler {
-    pub unsafe fn get() -> &'static mut Self {
-        let ctx: *mut Self;
-        arch::asm!("mov {ctx}, gs:0", ctx = out(reg) ctx);
-        &mut *ctx
+    pub fn get() -> &'static mut Self {
+        unsafe {
+            let ctx: *mut Self;
+            arch::asm!("mov {ctx}, gs:0", ctx = out(reg) ctx);
+            &mut *ctx
+        }
     }
 
-    pub fn run(&mut self) -> ! {
+    pub fn run(&mut self) {
         while let Some(thread) = self.work_queue.pop_front() {
             self.work = Some(thread);
-            unsafe {
-                context_swap(
-                    self.work.as_ref().unwrap_unchecked().stack_ptr,
-                    &mut self.stack_ptr,
-                );
-            }
+            self.work.as_ref().unwrap().context.swap(&mut self.context);
         }
-        panic!("Reached end of scheduler");
     }
 
-    pub fn enter(&mut self, interrupt: bool) {
-        if interrupt {
-            if let Some(work) = self.work.take() {
-                self.work_queue.push_back(work);
-                unsafe {
-                    context_swap(
-                        self.stack_ptr,
-                        &mut self.work_queue.back_mut().unwrap_unchecked().stack_ptr,
-                    );
-                }
-            } else {
-                panic!("Entered while not in a thread")
-            }
+    pub fn enter(&mut self, startup: bool) {
+        let work = self.work.as_mut().unwrap();
+        if startup {
+            (work.closure.take().unwrap())();
+            self.work = None;
+            self.context.load();
         } else {
-            if let Some(work) = self.work.as_ref() {
-                unsafe {
-                    arch::asm!("sti");
-                }
-                //(work.function)(work.function_arg);
-                unsafe {
-                    arch::asm!("cli");
-                }
-                self.work = None;
-                unsafe {
-                    context_swap(self.stack_ptr, &mut ptr::null_mut());
-                }
-            } else {
-                panic!("Entered while not in a thread")
-            }
+            self.work_queue.push_back(self.work.take().unwrap());
+            self.context
+                .swap(&mut self.work_queue.back_mut().unwrap().context);
         }
     }
 
-    pub fn spawn(&mut self, method: fn() -> !) {
-        self.work_queue.push_back(Schedulable::new(method));
+    pub fn queue(&mut self, closure: Box<dyn FnOnce()>) {
+        self.work_queue.push_back(Schedulable::new(closure));
     }
 }
 
 pub struct Schedulable {
-    stack: Box<[u8]>,
-    stack_ptr: *mut u8,
+    context: Context,
+    closure: Option<Box<dyn FnOnce()>>,
 }
 
 impl Schedulable {
-    fn new(entry_point: fn() -> !) -> Self {
-        let mut stack = unsafe { Box::<[u8; 16 * 1024]>::new_uninit().assume_init() };
-        let stack_ptr = unsafe {
-            let mut stack_ptr = stack.as_mut_ptr() as *mut usize;
-            stack_ptr = stack_ptr.sub(1); // eip/rip
-            stack_ptr.write(entry_point as usize);
-            #[cfg(target_arch = "x86")]
-            {
-                stack_ptr = stack_ptr.sub(4); // ebx, ebp, esi, edi
-            }
-            #[cfg(target_arch = "x86_64")]
-            {
-                stack_ptr = stack_ptr.sub(6); // rbx, rbp, r12, r13, r14, r15
-            }
-            stack_ptr as *mut u8
-        };
-        Self { stack, stack_ptr }
+    fn new(closure: Box<dyn FnOnce()>) -> Self {
+        fn schedulable_entry_point() -> ! {
+            Scheduler::get().enter(true);
+            unreachable!();
+        }
+
+        Self {
+            context: Context::new(schedulable_entry_point),
+            closure: Some(closure),
+        }
     }
 }
 
 pub fn run() -> ! {
-    fn dummy(_: usize) {}
+    fn scheduler_entry_point() -> ! {
+        let mut scheduler: Box<Scheduler> = Box::default();
+        scheduler.tss.load();
+        mm::sm::GS::set(ptr::addr_of!(scheduler) as usize, size_of::<Scheduler>());
 
-    unsafe {
-        let scheduler = Schedulable::new(entry_point_scheduler);
-        context_swap(scheduler.stack_ptr, &mut ptr::null_mut());
-        hint::unreachable_unchecked()
+        scheduler.queue(Box::new(|| {
+            Scheduler::get().queue(Box::new(|| loop {
+                log::info!("Inside the second closure");
+                Scheduler::get().enter(false);
+            }));
+            loop {
+                log::info!("Inside the closure");
+                Scheduler::get().enter(false);
+            }
+        }));
+        scheduler.run();
+        panic!("nothing left to do");
     }
-}
 
-fn entry_point_scheduler() -> ! {
-    let mut scheduler: Box<Scheduler> = Box::default();
-    scheduler.tss.set();
-    mm::sm::GS::set(ptr::addr_of!(scheduler) as usize, size_of::<Scheduler>());
-
-    scheduler.spawn(entry_point_thread);
-    scheduler.run()
-}
-
-fn entry_point_thread() -> ! {
-    unsafe { Scheduler::get() }.enter(false);
-    unsafe { hint::unreachable_unchecked() }
-}
-
-extern "C" {
-    fn context_swap(load: *mut u8, save: &mut *mut u8);
+    Context::new(scheduler_entry_point).load();
 }

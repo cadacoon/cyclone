@@ -24,24 +24,23 @@ pub type Block = usize;
 pub struct Bitmap(Box<[Block]>);
 
 impl Bitmap {
-    /// Creates a new bitmap
+    /// Creates a new bitmap.
     pub const fn new(value: Box<[Block]>) -> Self {
         Self(value)
     }
 
-    /// Updates the underlying backing of this bitmap, copies the data and
-    /// potentially shrink or grows it.
+    /// Updates the underlying backing of this bitmap by copying and potentially
+    /// shrink or growing it.
     pub fn update(&mut self, mut value: Box<[Block]>) {
         let copy_len = value.len().min(self.0.len());
         value[0..copy_len].copy_from_slice(&self.0[0..copy_len]);
         mem::swap(&mut self.0, &mut value);
-        mem::forget(value);
+        mem::forget(value); // TODO: remove workaround for init_phys_mem_e820
     }
 
-    /// Creates an iterator which returns sequences of consecutive zeros
+    /// Creates an iterator which returns sequences of consecutive zeros.
     pub fn consecutive_zeros(&self, count: usize) -> ConsecutiveZeros {
         assert!(count > 0);
-
         ConsecutiveZeros {
             bitmap: self,
             block_index: 0,
@@ -51,14 +50,14 @@ impl Bitmap {
         }
     }
 
-    /// Sets the given range to zero
+    /// Sets the given range to zero.
     pub fn set_zeros<R: ops::RangeBounds<usize>>(&mut self, range: R) {
         for (block, mask) in Masks::new(range, Block::BITS as usize * self.0.len()) {
             self.0[block] &= !mask;
         }
     }
 
-    /// Sets the given range to one
+    /// Sets the given range to one.
     pub fn set_ones<R: ops::RangeBounds<usize>>(&mut self, range: R) {
         for (block, mask) in Masks::new(range, Block::BITS as usize * self.0.len()) {
             self.0[block] |= mask;

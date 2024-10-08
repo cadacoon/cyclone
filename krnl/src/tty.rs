@@ -8,12 +8,12 @@ use crate::mm;
 const BUFFER_HEIGHT: usize = 25;
 const BUFFER_WIDTH: usize = 80;
 
-struct Tty {
+struct TtyInner {
     buffer: &'static mut [[u16; BUFFER_WIDTH]; BUFFER_HEIGHT],
     column: u8,
 }
 
-impl Write for Tty {
+impl Write for TtyInner {
     fn write_str(&mut self, s: &str) -> fmt::Result {
         for c in s.chars() {
             self.write_char(c)?;
@@ -56,11 +56,11 @@ impl Write for Tty {
     }
 }
 
-struct TtySubscriber(Mutex<Tty>);
+struct Tty(Mutex<TtyInner>);
 
-impl Default for TtySubscriber {
+impl Default for Tty {
     fn default() -> Self {
-        Self(Mutex::new(Tty {
+        Self(Mutex::new(TtyInner {
             buffer: unsafe {
                 &mut *((0xB8000 + (&mm::KERNEL_VMA as *const u8 as usize))
                     as *mut [[u16; BUFFER_WIDTH]; BUFFER_HEIGHT])
@@ -70,7 +70,7 @@ impl Default for TtySubscriber {
     }
 }
 
-impl log::Log for TtySubscriber {
+impl log::Log for Tty {
     fn enabled(&self, _metadata: &log::Metadata) -> bool {
         true
     }
@@ -82,7 +82,7 @@ impl log::Log for TtySubscriber {
     fn flush(&self) {}
 }
 
-pub fn init_logging() {
+pub fn init() {
     log::set_max_level(log::LevelFilter::Debug);
-    let _ = log::set_logger(Box::leak(Box::new(TtySubscriber::default())));
+    let _ = log::set_logger(Box::leak(Box::new(Tty::default())));
 }
