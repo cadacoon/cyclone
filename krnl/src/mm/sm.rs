@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use core::{arch, mem, ptr};
+use core::{arch, cell, mem, ptr};
 
 const DESCRIPTOR_NULL: usize = 0;
 const DESCRIPTOR_KCODE: usize = 1;
@@ -26,9 +26,9 @@ const DESCRIPTOR_GS: usize = 6;
 const DESCRIPTOR_TSS64: usize = 6;
 
 #[no_mangle]
-static mut DESCRIPTOR_TABLE: [Descriptor; 7] = [
+static DESCRIPTOR_TABLE: cell::SyncUnsafeCell<[Descriptor; 7]> = cell::SyncUnsafeCell::new([
     // NULL
-    Descriptor::zeroed(),
+    unsafe { Descriptor::zeroed() },
     // KCODE
     Descriptor::new(
         0x00000000,
@@ -82,15 +82,15 @@ static mut DESCRIPTOR_TABLE: [Descriptor; 7] = [
         DescriptorFlags::DB.union(DescriptorFlags::G),
     ),
     // TSS
-    Descriptor::zeroed(),
+    unsafe { Descriptor::zeroed() },
     // TSS64 / GS
-    Descriptor::zeroed(),
-];
+    unsafe { Descriptor::zeroed() },
+]);
 
 #[repr(C, packed(2))]
 struct DescriptorTableRegister {
     size: u16,
-    offset: usize,
+    offset: *mut [Descriptor],
 }
 
 #[repr(C)]
@@ -104,9 +104,8 @@ struct Descriptor {
 }
 
 impl Descriptor {
-    const fn zeroed() -> Self {
-        // SAFETY: all zero is valid (not present)
-        unsafe { mem::MaybeUninit::zeroed().assume_init() }
+    const unsafe fn zeroed() -> Self {
+        mem::MaybeUninit::zeroed().assume_init()
     }
 
     const fn new(
@@ -206,7 +205,7 @@ impl TaskStateSegment {
     pub unsafe fn load(&self) {
         let base = ptr::addr_of!(self) as usize;
         let limit = size_of_val(self);
-        DESCRIPTOR_TABLE[DESCRIPTOR_TSS] = Descriptor::new(
+        (&mut *DESCRIPTOR_TABLE.get())[DESCRIPTOR_TSS] = Descriptor::new(
             base as u32,
             limit as u32,
             DescriptorAccess::A
@@ -217,8 +216,8 @@ impl TaskStateSegment {
         );
         #[cfg(target_arch = "x86_64")]
         {
-            DESCRIPTOR_TABLE[DESCRIPTOR_TSS64].limit_0_15 = (base >> 32) as u16;
-            DESCRIPTOR_TABLE[DESCRIPTOR_TSS64].base_0_15 = (base >> 48) as u16;
+            (&mut *DESCRIPTOR_TABLE.get())[DESCRIPTOR_TSS64].limit_0_15 = (base >> 32) as u16;
+            (&mut *DESCRIPTOR_TABLE.get())[DESCRIPTOR_TSS64].base_0_15 = (base >> 48) as u16;
         }
         {
             arch::asm!("ltr {0:x}", in(reg) DESCRIPTOR_TSS << 3, options(nostack, preserves_flags))
@@ -231,7 +230,7 @@ pub struct GS;
 impl GS {
     #[cfg(target_arch = "x86")]
     pub unsafe fn set(base: usize, limit: usize) {
-        DESCRIPTOR_TABLE[DESCRIPTOR_GS] = Descriptor::new(
+        (&mut *DESCRIPTOR_TABLE.get())[DESCRIPTOR_GS] = Descriptor::new(
             base as u32,
             limit as u32,
             DescriptorAccess::A

@@ -12,12 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use core::mem;
+use core::{arch, cell, mem};
+
+static DESCRIPTOR_TABLE: cell::SyncUnsafeCell<[Descriptor; 32 + 16]> =
+    cell::SyncUnsafeCell::new([Descriptor::zeroed(); 32 + 16]);
 
 #[repr(C, packed(2))]
 struct DescriptorTableRegister {
     size: u16,
-    offset: usize,
+    offset: *mut [Descriptor],
 }
 
 #[repr(C)]
@@ -66,3 +69,65 @@ enum DescriptorGateType {
     Interrupt = 0xE,
     Trap = 0xF,
 }
+
+pub fn init() {
+    init_ivt();
+
+    let idtr = DescriptorTableRegister {
+        size: (mem::size_of_val(&DESCRIPTOR_TABLE) - 1) as u16,
+        offset: DESCRIPTOR_TABLE.get(),
+    };
+    unsafe {
+        arch::asm!(
+            "lidt [{}]", in(reg) &idtr, options(readonly, nostack, preserves_flags)
+        )
+    };
+}
+
+macro_rules! ivt {
+    ($($vector:tt $name:ident $description:tt $function:stmt),*$(,)?) => {
+        fn init_ivt() {
+            $((unsafe { &mut *DESCRIPTOR_TABLE.get() })[$vector] = Descriptor::new($name as usize, 1 << 3, DescriptorGateType::Trap, 0, 0);)*
+        }
+
+        $(extern "x86-interrupt" fn $name() {
+            $function
+            panic!($description)
+        })*
+    };
+}
+
+ivt!(
+    0x00 exc_de "Division Error" {},
+    0x01 exc_db "Debug" {},
+    0x02 exc_02 "Exception 2" {},
+    0x03 exc_bp "Breakpoint" {},
+    0x04 exc_of "Overflow" {},
+    0x05 exc_br "Bound Range Exceeded" {},
+    0x06 exc_ud "Invalid Opcode" {},
+    0x07 exc_nm "Device Not Available" {},
+    0x08 exc_df "Double Fault" {},
+    0x09 exc_09 "Exception 9" {},
+    0x0A exc_ts "Invalid TSS" {},
+    0x0B exc_np "Segment Not Present" {},
+    0x0C exc_ss "Stack-Segment Fault" {},
+    0x0D exc_gp "General Protection Fault" {},
+    0x0E exc_pf "Page Fault" {},
+    0x0F exc_15 "Exception 15" {},
+    0x10 exc_mf "x87 Floating-Point Exception" {},
+    0x11 exc_ac "Alignment Check" {},
+    0x12 exc_mc "Machine Check" {},
+    0x13 exc_xf "SIMD Floating-Point Exception" {},
+    0x14 exc_ve "Virtualization Exception" {},
+    0x15 exc_cp "Control Protection Exception" {},
+    0x16 exc_22 "Exception 22" {},
+    0x17 exc_23 "Exception 23" {},
+    0x18 exc_24 "Exception 24" {},
+    0x19 exc_25 "Exception 25" {},
+    0x1A exc_26 "Exception 26" {},
+    0x1B exc_27 "Exception 27" {},
+    0x1C exc_hv "Hypervisor Injection Exception" {},
+    0x1D exc_vc "VMM Communication Exception" {},
+    0x1E exc_sx "Security Exception" {},
+    0x1F exc_31 "Exception 31" {}
+);

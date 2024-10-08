@@ -19,6 +19,9 @@ use super::{
     KERNEL_VMA, PHYS_MEM,
 };
 
+#[global_allocator]
+pub static VIRT_MEM: VirtualMemory = VirtualMemory;
+
 pub struct VirtualMemory;
 
 impl VirtualMemory {
@@ -136,9 +139,6 @@ unsafe impl alloc::GlobalAlloc for VirtualMemory {
         self.free(page_start, pages);
     }
 }
-
-#[global_allocator]
-pub static VIRT_MEM: VirtualMemory = VirtualMemory;
 
 pub fn init_virt_mem() {
     (unsafe { &mut *(pg::PAGE_TABLE) })[pg::Page(0)].unmap();

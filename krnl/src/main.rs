@@ -52,6 +52,8 @@ extern "C" fn main(multiboot_magic: u32, multiboot_info: u32) -> ! {
     mm::init_virt_mem();
     mm::init_phys_mem();
 
+    ex::int::init();
+
     tty::init();
     mm::init_phys_mem_e820(unsafe {
         slice::from_raw_parts(

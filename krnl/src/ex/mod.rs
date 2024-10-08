@@ -20,7 +20,8 @@ use ctx::Context;
 use crate::mm;
 
 mod ctx;
-mod int;
+
+pub mod int;
 
 pub struct Scheduler {
     context: Context,
@@ -96,12 +97,12 @@ pub struct Runnable {
 impl Runnable {
     fn new(closure: Box<dyn FnOnce()>) -> Self {
         Self {
-            context: Context::new(Scheduler::runnable_entry),
+            context: Context::new(8 * 1024, Scheduler::runnable_entry),
             closure: Some(closure),
         }
     }
 }
 
 pub fn run() -> ! {
-    Context::new(Scheduler::scheduler_entry).load();
+    Context::new(8 * 1024, Scheduler::scheduler_entry).load();
 }

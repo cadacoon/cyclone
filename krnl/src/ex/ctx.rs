@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use core::{arch, hint, ptr};
+use core::{arch, hint, ptr, slice};
 
 use alloc::boxed::Box;
 
@@ -22,7 +22,6 @@ pub struct Context {
 }
 
 impl Context {
-    /// Creates a new context which can be used to save the current context.
     pub unsafe fn empty() -> Self {
         Self {
             _stack: Box::new([]),
@@ -30,12 +29,18 @@ impl Context {
         }
     }
 
-    /// Creates a new context starting at the given entry point.
-    pub fn new(entry_point: fn() -> !) -> Self {
+    pub fn new(stack_size: usize, entry_point: fn() -> !) -> Self {
         // SAFETY: stack gets initialized as it is used
-        let mut stack = unsafe { Box::<[u8; 8 * 1024]>::new_uninit().assume_init() };
+        let mut stack = unsafe {
+            Box::from_raw(slice::from_raw_parts_mut(
+                alloc::alloc::alloc(
+                    core::alloc::Layout::from_size_align(stack_size, 4096).unwrap(),
+                ),
+                stack_size,
+            ))
+        };
 
-        // SAFETY: stack is valid and large enough to encompass all elements
+        // SAFETY: stack is valid, large enough to encompass all element
         let stack_ptr = unsafe {
             let mut stack_ptr = stack.as_mut_ptr() as *mut usize;
             stack_ptr = stack_ptr.sub(1); // eip/rip
@@ -57,18 +62,24 @@ impl Context {
         }
     }
 
-    /// Loads the given context and will never return as the current context is
+    /// The context is swapped by using the stack pointer specified by `self`.
+    ///
+    /// Note that this function cannot return as the previous stack pointer is
     /// not saved.
     pub fn load(&self) -> ! {
-        // SAFETY: Context guarantees stack_ptr to be valid, and the current context is
-        // not saved, therefore it will never return in a safe manner
+        // SAFETY:
+        // - stack_ptr is guaranteed to be valid, as this is enforced by the `Context`
+        //   struct;
+        // - this function can never return because the current stack pointer is
+        //   discarded.
         unsafe {
             context_swap(self.stack_ptr, &mut ptr::null_mut());
             hint::unreachable_unchecked()
         }
     }
 
-    /// Loads the given context and saves the current context.
+    /// The context is swapped by using the stack pointer specified by `self`,
+    /// and saving the previous one to `save`.
     pub fn swap(&self, save: &mut Self) {
         // SAFETY: Context guarantees stack_ptr to be valid
         unsafe {

@@ -19,6 +19,19 @@ use spin::Mutex;
 
 use super::pg;
 
+const PHYS_MEM_SIZE: usize = 2048;
+pub static PHYS_MEM_DATA: cell::SyncUnsafeCell<[usize; PHYS_MEM_SIZE / usize::BITS as usize]> =
+    cell::SyncUnsafeCell::new([0; PHYS_MEM_SIZE / usize::BITS as usize]);
+pub static PHYS_MEM: Mutex<PhysicalMemory> = Mutex::new(PhysicalMemory::new(
+    Bitmap::new(unsafe {
+        mem::transmute(ptr::slice_from_raw_parts(
+            PHYS_MEM_DATA.get(),
+            PHYS_MEM_SIZE / usize::BITS as usize,
+        ))
+    }),
+    PHYS_MEM_SIZE,
+));
+
 pub struct PhysicalMemory {
     used: Bitmap,
     free: usize,
@@ -50,19 +63,6 @@ impl PhysicalMemory {
             .map(|frame_range| frame_range.start)
     }
 }
-
-const PHYS_MEM_SIZE: usize = 2048;
-pub static PHYS_MEM_DATA: cell::SyncUnsafeCell<[usize; PHYS_MEM_SIZE / usize::BITS as usize]> =
-    cell::SyncUnsafeCell::new([0; PHYS_MEM_SIZE / usize::BITS as usize]);
-pub static PHYS_MEM: Mutex<PhysicalMemory> = Mutex::new(PhysicalMemory::new(
-    Bitmap::new(unsafe {
-        mem::transmute(ptr::slice_from_raw_parts(
-            PHYS_MEM_DATA.get(),
-            PHYS_MEM_SIZE / usize::BITS as usize,
-        ))
-    }),
-    PHYS_MEM_SIZE,
-));
 
 pub fn init_phys_mem() {
     PHYS_MEM.lock().mark_used(0, pg::PAGES_PER_TABLE);

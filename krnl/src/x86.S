@@ -14,11 +14,6 @@
 
     .section .multiboot.init, "a"
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-// __start
-//   eax        multiboot_magic
-//   ebx        multiboot_info
-////////////////////////////////////////////////////////////////////////////////////////////////////
     .global __start
 __start:
     .code32
@@ -78,12 +73,10 @@ gdtr:
 
     .section .bss
 
-    .align 16
-stack_bottom:
-    .zero 16384 // 16 KB
-stack_top:
-
     .align 4096
+stack_bottom:
+    .zero 4096
+stack_top:
 ptl2:
     .zero 4096
 ptl1:
